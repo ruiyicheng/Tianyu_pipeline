@@ -28,7 +28,7 @@ class calibrator:
         for row in myresult:
             res_dict[row[index_key]] = row[index_value]
         return res_dict
-    def stacking(self,outpath,stack_img_id_list = [],mode = "query",obs_id = 2,img_type = "bias",hierarchy = 1,keep_origin = True,img_use = "all",use_GPU = False,method = "median"):
+    def stacking(self,outpath,stack_img_id_list = [],mode = "query",obs_id = 2,img_type = "bias",hierarchy = 1,keep_origin = True,img_use = "all",use_GPU = False,method = "median",batch_stack = False, batch_size = 5):
 
         mycursor = self.cnx.cursor()
         if mode=="query":
@@ -121,6 +121,7 @@ class calibrator:
             mycursor.execute(sql,args)
             self.cnx.commit()
         return new_img_id
+    
     def calibration(self,obs_id=1,hierarchy=2,img_type = "flat_raw",consider_flat = True,consider_bias = True,bias_id = 2,bias_hierarchy = 2,flat_id = 1,flat_hierarchy = 2,keep_origin = True,outpath="samedir",debug = False):
         mycursor = self.cnx.cursor()
         sql = "SELECT * from img where img.obs_id = %s AND img.image_type_id = %s AND !deleted AND hierarchy = %s;"
