@@ -101,22 +101,32 @@ XML_NAME         sex.xml        # Filename for XML output
 XSL_URL          file:///usr/local/share/sextractor/sextractor.xsl
                                 # Filename for XSL style-sheet
 """
-    def use(self,input_file_path,output_file_path,keep_out = True,ymax = 2200):
-        if not keep_out:
-            output_file_path = "temp_"+str(hash(time.time()))+".fit"
-        new_conf = "CATALOG_NAME     "+output_file_path+'\n'+self.conf
-        temp_file_name = "temp_conf_"+str(hash(time.time()))+".txt"
-        with open(temp_file_name,'w') as f:
-            f.write(new_conf)
-        os.system('sex '+input_file_path+' -c '+temp_file_name)
-        os.system('rm '+temp_file_name)
-        if not keep_out:
-            res = fits.open(output_file_path)
-            ret_res = res[2].data
-            os.system('rm '+output_file_path)
-            Y_max = np.squeeze(ret_res['YMAX_IMAGE'])
-            ret_res = ret_res[Y_max<ymax]
-            return ret_res
+    def use(self,input_file_path,output_file_path = 'temp.fit',keep_out = True,ymax = 2200,use_sep = False):
+        if not use_sep:
+            if not keep_out:
+                output_file_path = "temp_"+str(hash(time.time()))+".fit"
+            new_conf = "CATALOG_NAME     "+output_file_path+'\n'+self.conf
+            temp_file_name = "temp_conf_"+str(hash(time.time()))+".txt"
+            with open(temp_file_name,'w') as f:
+                f.write(new_conf)
+            os.system('sex '+input_file_path+' -c '+temp_file_name)
+            os.system('rm '+temp_file_name)
+            if not keep_out:
+                res = fits.open(output_file_path)
+                ret_res = res[2].data
+                os.system('rm '+output_file_path)
+                Y_max = np.squeeze(ret_res['YMAX_IMAGE'])
+                ret_res = ret_res[Y_max<ymax]
+                return ret_res
+        else:
+            import sep
+            
+            data = fits.getdata(input_file_path)
+            data = data.byteswap().newbyteorder()
+            bkg = sep.Background(data)
+            data_sub = data - bkg
+            objects = sep.extract(data_sub,2, err=bkg.globalrms)
+            return objects
         return -1
 
 if __name__=="__main__":
