@@ -206,6 +206,11 @@ class calibrator:
                 mycursor.execute(sql,args)
                 self.cnx.commit()
                 print("this_outpath saved at",this_outpath)
+                mycursor = self.cnx.cursor()
+                mycursor.execute("SELECT LAST_INSERT_ID();")
+                myresult = mycursor.fetchall()
+                new_img_id = myresult[0][0] #auto_increment
+                return new_img_id
 if __name__=="__main__":
     clb = calibrator()
     #print(clb.stacking('/home/yichengrui/workspace/TianYu/pipeline/image_process/out/caliborate/superbias_mgo.fit',2,method = "median"))

@@ -228,26 +228,27 @@ class flux_extractor:
                 self.dl.cnx.commit()
 
         else:
-            flux_l = []
-            image_id_list = []
-            for arg in args_list:
-                if arg[0]==655:
-                    flux_l.append(arg[4])
-                    image_id_list.append(arg[1])
-            alignment_res = np.array(alignment_res)
-            pix_num = alignment_res[:,4]
-            flux_l = np.array(flux_l)
-            pix_num = np.array(pix_num)
-            #print(image_id_list[(flux_l/np.median(flux_l)*np.median(pix_num))>0.7])
-            plt.figure()
-            plt.plot(tmid,flux_l/np.median(flux_l)*np.median(pix_num),'.b')
-            plt.plot(tmid,pix_num,'-r')
-            plt.xlabel('jd-utc')
-            plt.ylabel('flux')
-            plt.savefig('hat-p-20.pdf')
-            np.save("num_star_pix.npy",pix_num)
-            np.save("flux.npy",flux_l)
-            np.save("tmid.npy",tmid)
+            pass
+            # flux_l = []
+            # image_id_list = []
+            # for arg in args_list:
+            #     if arg[0]==655:
+            #         flux_l.append(arg[4])
+            #         image_id_list.append(arg[1])
+            # alignment_res = np.array(alignment_res)
+            # pix_num = alignment_res[:,4]
+            # flux_l = np.array(flux_l)
+            # pix_num = np.array(pix_num)
+            # #print(image_id_list[(flux_l/np.median(flux_l)*np.median(pix_num))>0.7])
+            # plt.figure()
+            # plt.plot(tmid,flux_l/np.median(flux_l)*np.median(pix_num),'.b')
+            # plt.plot(tmid,pix_num,'-r')
+            # plt.xlabel('jd-utc')
+            # plt.ylabel('flux')
+            # plt.savefig('hat-p-20.pdf')
+            # np.save("num_star_pix.npy",pix_num)
+            # np.save("flux.npy",flux_l)
+            # np.save("tmid.npy",tmid)
         
 
 
