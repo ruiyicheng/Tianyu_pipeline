@@ -1,10 +1,10 @@
 from astropy.io import fits
 import sys
 import numpy as np
-sys.path.append('/home/yichengrui/workspace/TianYu/pipeline/scheduling/')
-sys.path.append('/home/yichengrui/workspace/TianYu/pipeline/image_process/')
-from use_SE import SE
-import data_loader as dl
+# sys.path.append('/home/yichengrui/workspace/TianYu/pipeline/scheduling/')
+# sys.path.append('/home/yichengrui/workspace/TianYu/pipeline/image_process/')
+from TianYu.pipeline.image_process.use_SE import SE
+import TianYu.pipeline.scheduling.data_loader as dl
 import time
 import os
 
@@ -23,14 +23,14 @@ class alignment:
             return -1
         
 
-        template_output = "/home/yichengrui/workspace/TianYu/pipeline/template_generating/template_"+str(hash(time.time()))+".fit"
-        fits_data = self.se.use(myresult_template[0][1],template_output,keep_out = False)
+        #template_output = "/home/yichengrui/workspace/TianYu/pipeline/template_generating/template_"+str(hash(time.time()))+".fit"
+        fits_data = self.se.use(myresult_template[0][1],keep_out = False,use_sep = True)
         #fits_res = fits.open(template_output)
         # print(fits_res[2].header)
         #print(fits_res[2].data['X_IMAGE'])
         #os.system("rm "+template_output)
-        x_stars_template = np.squeeze(fits_data['X_IMAGE'])
-        y_stars_template = np.squeeze(fits_data['Y_IMAGE'])
+        x_stars_template = np.squeeze(fits_data['x'])
+        y_stars_template = np.squeeze(fits_data['y'])
 
 
 
@@ -47,15 +47,15 @@ class alignment:
         res_list = []
         for res in myresult:
             #print(res)
-            res_output = "/home/yichengrui/workspace/TianYu/pipeline/template_generating/res_"+str(hash(time.time()))+".fit"
-            fits_data = self.se.use(res[1],res_output,keep_out = False)
+            #res_output = "/home/yichengrui/workspace/TianYu/pipeline/template_generating/res_"+str(hash(time.time()))+".fit"
+            fits_data = self.se.use(res[1],keep_out = False,use_sep = True)
             #fits_res = fits.open(res_output)
             #os.system("rm "+res_output)
-            x_stars_this = np.squeeze(fits_data['X_IMAGE'])
-            y_stars_this = np.squeeze(fits_data['Y_IMAGE'])
-            xx_stars = np.squeeze(fits_data['X2_IMAGE']).reshape(-1,1)
-            yy_stars = np.squeeze(fits_data['Y2_IMAGE']).reshape(-1,1)
-            xy_stars = np.squeeze(fits_data['XY_IMAGE']).reshape(-1,1)
+            x_stars_this = np.squeeze(fits_data['x'])
+            y_stars_this = np.squeeze(fits_data['y'])
+            xx_stars = np.squeeze(fits_data['x2']).reshape(-1,1)
+            yy_stars = np.squeeze(fits_data['y2']).reshape(-1,1)
+            xy_stars = np.squeeze(fits_data['xy']).reshape(-1,1)
             lambda1 = ((xx_stars+yy_stars)/2+np.sqrt(((xx_stars-yy_stars)/2)**2+xy_stars**2)).reshape(-1,1)
             lambda2 = ((xx_stars+yy_stars)/2-np.sqrt(((xx_stars-yy_stars)/2)**2+xy_stars**2)).reshape(-1,1)
             print(np.sum((lambda1/lambda2)<1.2)/len(lambda1),np.mean(lambda1/lambda2),np.median(lambda1/lambda2),np.min(lambda1/lambda2))

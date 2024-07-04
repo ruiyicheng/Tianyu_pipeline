@@ -8,12 +8,12 @@ import astrometry
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 import pandas as pd
-sys.path.append('/home/yichengrui/workspace/TianYu/pipeline/scheduling/')
-import data_loader as dl
-sys.path.append('/home/yichengrui/workspace/TianYu/pipeline/template_generating/')
-import image_alignment as il
-sys.path.append('/home/yichengrui/workspace/TianYu/pipeline/image_process/')
-import calibrator as cl
+#sys.path.append('/home/yichengrui/workspace/TianYu/pipeline/scheduling/')
+import TianYu.pipeline.scheduling.data_loader as dl
+#sys.path.append('/home/yichengrui/workspace/TianYu/pipeline/template_generating/')
+import TianYu.pipeline.template_generating.image_alignment as il
+#sys.path.append('/home/yichengrui/workspace/TianYu/pipeline/image_process/')
+import TianYu.pipeline.image_process.calibrator as cl
 import use_SE as SE
 import flux_extractor as FE
 
@@ -118,17 +118,17 @@ class template_generator:
         sky_template_img = fits.getdata(sky_template_img_path)
 
         print(sky_template_ra,sky_template_dec)
-        temp_out = "temp"+str(hash(time.time()))+".fit"
-        se_out = self.se.use(sky_template_img_path,temp_out,keep_out = False)
-        x_stars = np.squeeze(se_out['X_IMAGE']).reshape(-1,1)
-        y_stars = np.squeeze(se_out['Y_IMAGE']).reshape(-1,1)
+        #temp_out = "temp"+str(hash(time.time()))+".fit"
+        se_out = self.se.use(sky_template_img_path,use_sep = True)
+        x_stars = np.squeeze(se_out['x']).reshape(-1,1)
+        y_stars = np.squeeze(se_out['y']).reshape(-1,1)
         stars = np.hstack([x_stars,y_stars])
         x_stars = np.squeeze(x_stars)
         y_stars = np.squeeze(y_stars)
-        xx_stars = np.squeeze(se_out['X2_IMAGE']).reshape(-1,1)
-        yy_stars = np.squeeze(se_out['Y2_IMAGE']).reshape(-1,1)
-        xy_stars = np.squeeze(se_out['XY_IMAGE']).reshape(-1,1)
-        flux = np.squeeze(se_out['FLUX_APER'])
+        xx_stars = np.squeeze(se_out['xx']).reshape(-1,1)
+        yy_stars = np.squeeze(se_out['yy']).reshape(-1,1)
+        xy_stars = np.squeeze(se_out['xy']).reshape(-1,1)
+        flux = np.squeeze(se_out['flux'])
         lambda1 = np.squeeze((xx_stars+yy_stars)/2+np.sqrt(((xx_stars-yy_stars)/2)**2+xy_stars**2))
         lambda2 = np.squeeze((xx_stars+yy_stars)/2-np.sqrt(((xx_stars-yy_stars)/2)**2+xy_stars**2))
         gap = 30

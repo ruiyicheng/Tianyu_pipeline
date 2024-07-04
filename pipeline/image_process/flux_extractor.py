@@ -3,16 +3,18 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import sys
 from astropy.io import fits
-sys.path.append("/home/yichengrui/workspace/TianYu/pipeline/scheduling/")
-import data_loader as dl
-sys.path.append("/home/yichengrui/workspace/TianYu/pipeline/template_generating")
-import image_alignment as il
+#sys.path.append("/home/yichengrui/workspace/TianYu/pipeline/scheduling/")
+from TianYu.pipeline.scheduling import data_loader as dl
+#sys.path.append("/home/yichengrui/workspace/TianYu/pipeline/template_generating")
+from TianYu.pipeline.template_generating import image_alignment as il
 
 class flux_extractor:
     def __init__(self,Generate = False):
+        import os
+        self.circ_mask_path = os.path.dirname(__file__)+"/circ_mask/"
         self.dl = dl.data_loader()
         self.al = il.alignment()
-        self.circ_mask_path = '/home/yichengrui/workspace/TianYu/pipeline/image_process/circ_mask/'
+        #self.circ_mask_path = '/home/yichengrui/workspace/TianYu/pipeline/image_process/circ_mask/'
         if Generate:
             self.generate_mask()
         else:
@@ -226,26 +228,27 @@ class flux_extractor:
                 self.dl.cnx.commit()
 
         else:
-            flux_l = []
-            image_id_list = []
-            for arg in args_list:
-                if arg[0]==655:
-                    flux_l.append(arg[4])
-                    image_id_list.append(arg[1])
-            alignment_res = np.array(alignment_res)
-            pix_num = alignment_res[:,4]
-            flux_l = np.array(flux_l)
-            pix_num = np.array(pix_num)
-            #print(image_id_list[(flux_l/np.median(flux_l)*np.median(pix_num))>0.7])
-            plt.figure()
-            plt.plot(tmid,flux_l/np.median(flux_l)*np.median(pix_num),'.b')
-            plt.plot(tmid,pix_num,'-r')
-            plt.xlabel('jd-utc')
-            plt.ylabel('flux')
-            plt.savefig('hat-p-20.pdf')
-            np.save("num_star_pix.npy",pix_num)
-            np.save("flux.npy",flux_l)
-            np.save("tmid.npy",tmid)
+            pass
+            # flux_l = []
+            # image_id_list = []
+            # for arg in args_list:
+            #     if arg[0]==655:
+            #         flux_l.append(arg[4])
+            #         image_id_list.append(arg[1])
+            # alignment_res = np.array(alignment_res)
+            # pix_num = alignment_res[:,4]
+            # flux_l = np.array(flux_l)
+            # pix_num = np.array(pix_num)
+            # #print(image_id_list[(flux_l/np.median(flux_l)*np.median(pix_num))>0.7])
+            # plt.figure()
+            # plt.plot(tmid,flux_l/np.median(flux_l)*np.median(pix_num),'.b')
+            # plt.plot(tmid,pix_num,'-r')
+            # plt.xlabel('jd-utc')
+            # plt.ylabel('flux')
+            # plt.savefig('hat-p-20.pdf')
+            # np.save("num_star_pix.npy",pix_num)
+            # np.save("flux.npy",flux_l)
+            # np.save("tmid.npy",tmid)
         
 
 
@@ -262,7 +265,9 @@ class flux_extractor:
     
 if __name__=="__main__":
     from astropy.io import fits
-    fe = flux_extractor(Generate = False)
+    #fe = flux_extractor(Generate = False)
+    import os
+    print(os.getcwd())
     # r = fe.generate_ring_musk(14,20)
     # star_apps = list(range(3,25))
     # snr_list = []
@@ -273,7 +278,7 @@ if __name__=="__main__":
     # print(star_apps[np.argmax(snr_list)])
     # plt.plot(star_apps,snr_list,'.')
     # plt.savefig('app-snr.pdf')
-    fe.light_curve_extraction(1,3,1,aligned=False,record = False)
+    #fe.light_curve_extraction(1,3,1,aligned=False,record = False)
 
     # mask_arr = np.ma.masked_array(np.ones(r.shape),mask = np.logical_not(r))
     # # print(np.ma.sum(np.ma.masked_array(np.ones(r.shape),mask = np.logical_not(r))))
