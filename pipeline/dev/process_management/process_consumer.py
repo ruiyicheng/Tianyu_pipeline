@@ -6,8 +6,8 @@ import mysql.connector
 import json
 import socket
 
-from Tianyu_pipeline.pipeline.template_generating import image_alignment as il
-from Tianyu_pipeline.pipeline.dev.file_system import file_system as fs
+#from Tianyu_pipeline.pipeline.template_generating import image_alignment as il
+#from Tianyu_pipeline.pipeline.dev.file_system import file_system as fs
 
 
 
@@ -36,11 +36,12 @@ class process_consumer:
         sql = "SELECT * FROM data_process_site;"
         args = tuple()
         res = self.queue_db(sql,args)
-        pika_host = res[res['is_pika_site']].loc[0]['process_site_ip']
-        this_site_index = res[res['is_pika_site']].loc[0]['process_site_id']
-        if pika_host in local_host_list:
-            pike_host = 'localhost'
-        
+        # pika_host = res[res['is_pika_site']].loc[0]['process_site_ip']
+        # this_site_index = res[res['is_pika_site']].loc[0]['process_site_id']
+        # if pika_host in local_host_list:
+        #     pike_host = 'localhost'
+        this_site_index = 1
+        pike_host = '127.0.0.1'
         return this_site_index,pike_host
 
     def resolve_msg(self,msg):
@@ -48,9 +49,10 @@ class process_consumer:
         PID = int(res[0])
         cmd = res[1]
         if len(res)==2:    
-            par = "\{\}"
+            par = "{}"
         if len(res)==3:
             par = res[2]
+        print(par)
         par = json.loads(par)
         return PID,cmd,par
     def work(self,PID,cmd,par):
@@ -73,7 +75,7 @@ class process_consumer:
             pass
         if cmd == 'alignment':
             pass
-        #time.sleep(1)
+        time.sleep(0.5)
         #return 0
         return 1
     def callback(self,ch, method, properties, body):
@@ -101,7 +103,7 @@ class process_consumer:
 
     def run(self):
         self.channel.basic_qos(prefetch_count=1)
-        self.channel.basic_consume(queue='command_queue'+str(self.pika_channel_id) , on_message_callback=self.callback)
+        self.channel.basic_consume(queue='command_queue_'+str(self.pika_channel_id) , on_message_callback=self.callback)
         self.channel.start_consuming()
 
 pc = process_consumer()

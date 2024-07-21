@@ -1,12 +1,17 @@
 use tianyudev;
 CREATE TABLE process(
-	process_group_id INT NOT NULL,
     process_id DECIMAL(25) UNIQUE NOT NULL PRIMARY KEY,
     process_cmd TEXT,
     process_status_id INT,
+    process_site_id INT,
+    process_group_id INT,
     FOREIGN KEY (process_status_id) REFERENCES process_type(process_status_id),
-    FOREIGN KEY (process_site_id) REFERENCES data_process_site(process_site_id)
+    FOREIGN KEY (process_site_id) REFERENCES data_process_site(process_site_id),
+    FOREIGN KEY (process_group_id) REFERENCES data_process_group(process_group_id)
 );
+
+
+DROP TABLE process;
 CREATE TABLE process_dependence(
     master_process_id DECIMAL(25),
     dependence_process_id DECIMAL(25),
@@ -14,6 +19,7 @@ CREATE TABLE process_dependence(
     FOREIGN KEY (dependence_process_id) REFERENCES process(process_id)
 );
 
+DROP TABLE process_dependence;
 INSERT INTO process_type (process_status) VALUES ("WAITING");
 INSERT INTO process_type (process_status) VALUES ("IN QUEUE");
 INSERT INTO process_type (process_status) VALUES ("RUNNING");
@@ -64,7 +70,7 @@ CREATE TABLE data_process_site(
     mysql_user_name TEXT,
     mysql_user_psw TEXT
 );
-
+ INSERT INTO data_process_site (process_site_name,process_site_ip,mysql_user_name,mysql_user_psw) values ('macbook','127.0.0.1','root','root');
 
 CREATE TABLE data_process_site_info(
 	process_site_id INT NOT NULL,
