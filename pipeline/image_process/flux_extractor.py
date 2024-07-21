@@ -4,9 +4,9 @@ import pandas as pd
 import sys
 from astropy.io import fits
 #sys.path.append("/home/yichengrui/workspace/TianYu/pipeline/scheduling/")
-from TianYu.pipeline.scheduling import data_loader as dl
+from Tianyu_pipeline.pipeline.scheduling import data_loader as dl
 #sys.path.append("/home/yichengrui/workspace/TianYu/pipeline/template_generating")
-from TianYu.pipeline.template_generating import image_alignment as il
+from Tianyu_pipeline.pipeline.template_generating import image_alignment as il
 
 class flux_extractor:
     def __init__(self,Generate = False):

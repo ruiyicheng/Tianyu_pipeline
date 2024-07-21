@@ -9,11 +9,11 @@ from astropy.coordinates import SkyCoord
 import astropy.units as u
 import pandas as pd
 #sys.path.append('/home/yichengrui/workspace/TianYu/pipeline/scheduling/')
-import TianYu.pipeline.scheduling.data_loader as dl
+import Tianyu_pipeline.pipeline.scheduling.data_loader as dl
 #sys.path.append('/home/yichengrui/workspace/TianYu/pipeline/template_generating/')
-import TianYu.pipeline.template_generating.image_alignment as il
+import Tianyu_pipeline.pipeline.template_generating.image_alignment as il
 #sys.path.append('/home/yichengrui/workspace/TianYu/pipeline/image_process/')
-import TianYu.pipeline.image_process.calibrator as cl
+import Tianyu_pipeline.pipeline.image_process.calibrator as cl
 import use_SE as SE
 import flux_extractor as FE
 

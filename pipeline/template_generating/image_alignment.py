@@ -3,8 +3,8 @@ import sys
 import numpy as np
 # sys.path.append('/home/yichengrui/workspace/TianYu/pipeline/scheduling/')
 # sys.path.append('/home/yichengrui/workspace/TianYu/pipeline/image_process/')
-from TianYu.pipeline.image_process.use_SE import SE
-import TianYu.pipeline.scheduling.data_loader as dl
+from Tianyu_pipeline.pipeline.image_process.use_SE import SE
+import Tianyu_pipeline.pipeline.scheduling.data_loader as dl
 import time
 import os
 
