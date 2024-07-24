@@ -5,11 +5,11 @@ import pika
 import pandas as pd
 
 class process_manager:
-    def __init__(self,host_pika = 'localhost',host_sql = 'localhost'):
+    def __init__(self,host_pika = '192.168.1.107',host_sql = '192.168.1.107'):
 
-        self.cnx = mysql.connector.connect(user='root', password='root',
+        self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
                               host=host_sql,
-                              database='tianyudev',port = 8889)
+                              database='tianyudev')
         self.host_pika = host_pika
 
 
@@ -19,20 +19,20 @@ class process_manager:
         print("Shut down")
         self.connection.close()
 
-    def send(self,site_id,message):
+    def send(self,site_id,group_id,message):
         self.connection = pika.BlockingConnection(pika.ConnectionParameters(self.host_pika))
         self.channel = self.connection.channel()
 
-        self.channel.queue_declare(queue='command_queue_'+str(site_id), durable=True)
+        self.channel.queue_declare(queue=f'command_queue_{site_id}_{group_id}', durable=True)
         #message = ' '.join(sys.argv[1:]) or "Hello World!"
         self.channel.basic_publish(
             exchange='',
-            routing_key='command_queue_'+str(site_id),
+            routing_key=f'command_queue_{site_id}_{group_id}',
             body=message,
             properties=pika.BasicProperties(
                 delivery_mode=pika.DeliveryMode.Persistent
             ))
-        print(f" [x] Sent {message}")
+        print(f" [x] Sent {message} to",f'command_queue_{site_id}_{group_id}')
         time.sleep(0.0001)
     def generate_PID(self):
         return (time.time_ns()+np.random.randint(0,1000))*100000+np.random.randint(0,1000000)
@@ -84,7 +84,7 @@ class process_manager:
                 res = self.queue_db(sql,argsql)
                 #print(res)
                 if len(res)==0:# all dependences are satisfied
-                    self.submit_mission(r['process_site_id'],r['process_id'],r['process_cmd'])
+                    self.submit_mission(r['process_site_id'],r['process_group_id'],r['process_id'],r['process_cmd'])
             time.sleep(0.5)
             self.cnx.commit()
 
