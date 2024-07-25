@@ -61,6 +61,8 @@ class process_consumer:
             pass
         if cmd == 'init_dir':
             pass
+        if cmd == 'register':
+            pass
         if cmd == 'capture':
             pass
         if cmd == 'data_deliver':

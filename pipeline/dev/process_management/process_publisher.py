@@ -16,7 +16,9 @@ class process_publisher:
         pass
     def align(self,PID):
         pass
-
+    
+    def register_info(self,param_dict):
+        pass
     def stacking(self,consume_site_id,consume_group_id,PIDs,num_image_limit = 5):
         Next_hierarchy_PID_list = []
         for i in range((len(PIDs)-1)//num_image_limit+1):
