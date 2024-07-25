@@ -115,7 +115,6 @@ CREATE TABLE target_n(
     target_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
     target_name TEXT,
     target_type_id INT,
-    target_dir TEXT,
     process_id DECIMAL(25),
     FOREIGN KEY (target_type_id) REFERENCES target_type(target_type_id),
     FOREIGN KEY (process_id) REFERENCES process(process_id)
@@ -126,6 +125,7 @@ CREATE TABLE observation(
     observation_type_id INT,
     target_id INT DEFAULT NULL,
     n_pic INT,
+    batch_size INT,
     instrument_id INT DEFAULT NULL,
     obs_site_id INT DEFAULT NULL,
     observer_id INT  DEFAULT NULL,
@@ -154,6 +154,7 @@ CREATE TABLE img(
     bjd_tdb_mid_approximation DOUBLE DEFAULT NULL,
     bjd_tdb_end_approximation DOUBLE DEFAULT NULL,
     n_stack INT DEFAULT 1,
+    batch INT DEFAULT 1,
     processed BOOLEAN DEFAULT 0, 
     image_type_id INT,
     flat_image_id BIGINT DEFAULT NULL,
@@ -201,14 +202,22 @@ CREATE TABLE sky(
     FOREIGN KEY (template_image_id) REFERENCES img(image_id)
 );
 
-CREATE TABLE star(
-    star_id BIGINT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
+CREATE TABLE source_type(
+    source_type_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    source_type TEXT
+);
+
+
+CREATE TABLE source(
+    source_id BIGINT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    source_type_id INT NOT NULL,
     sky_id BIGINT,
     x_template DOUBLE,
     y_template DOUBLE,
     flux_template DOUBLE,
     e_flux_template FLOAT,
     INDEX(flux_template) USING BTREE,
+    FOREIGN KEY (source_type_id) REFERENCES source_type(source_type_id),
     FOREIGN KEY (sky_id) REFERENCES sky(sky_id)
 );
 
@@ -217,24 +226,26 @@ CREATE TABLE star_pixel_img(
     star_id BIGINT,
     image_id BIGINT,
     flux_raw DOUBLE,
-    flux_calibrated DOUBLE,
+    flux_relative DOUBLE,
     flux_normalized DOUBLE,
     flux_raw_error DOUBLE,
-    flux_calibrated_error DOUBLE,
+    flux_relative_error DOUBLE,
     flux_normalized_error DOUBLE,
-    mag_calibrated DOUBLE,
-    e_mag_calibrated DOUBLE,
+    mag_calibrated_instrument DOUBLE,
+    e_mag_calibrated_instrument DOUBLE,
+    mag_calibrated_absolute DOUBLE,
+    e_mag_calibrated_absolute DOUBLE,    
     bjd_tdb_start DOUBLE DEFAULT NULL,
     bjd_tdb_mid DOUBLE DEFAULT NULL,
     bjd_tdb_end DOUBLE DEFAULT NULL,
     is_reference BOOLEAN DEFAULT 0,
     birth_process_id DECIMAL(25),
-    calibration_process_id DECIMAL(25),
+    relative_process_id DECIMAL(25),
     normalization_process_id DECIMAL(25),
     mag_calibration_process_id DECIMAL(25),
     timing_process_id DECIMAL(25),
     FOREIGN KEY (birth_process_id) REFERENCES process(process_id),
-    FOREIGN KEY (calibration_process_id) REFERENCES process(process_id),
+    FOREIGN KEY (relative_process_id) REFERENCES process(process_id),
     FOREIGN KEY (normalization_process_id) REFERENCES process(process_id),
     FOREIGN KEY (mag_calibration_process_id) REFERENCES process(process_id),
     FOREIGN KEY (timing_process_id) REFERENCES process(process_id),
