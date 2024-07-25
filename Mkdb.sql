@@ -34,6 +34,8 @@ CREATE TABLE observation_type(
 
 CREATE TABLE filters(
     filter_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    process_id DECIMAL(25),
+    FOREIGN KEY (process_id) REFERENCES process(process_id),
     filter_name TEXT
 );
 
@@ -42,15 +44,19 @@ CREATE TABLE instrument(
     instrument_name TEXT,
     filter_id INT,
     local_folder_path TEXT,
-    FOREIGN KEY (filter_id) REFERENCES filters(filter_id) 
+    process_id DECIMAL(25),
+    FOREIGN KEY (filter_id) REFERENCES filters(filter_id),
+    FOREIGN KEY (process_id) REFERENCES process(process_id)
 );
 
 CREATE TABLE obs_site(
     process_site_id INT,
     obs_site_name TEXT,
+    process_id DECIMAL(25),
     obs_site_lon DOUBLE DEFAULT NULL,
     obs_site_lat DOUBLE DEFAULT NULL,
     obs_site_height DOUBLE DEFAULT NULL,
+    FOREIGN KEY (process_id) REFERENCES process(process_id),
     FOREIGN KEY (process_site_id) REFERENCES data_process_site(process_site_id) 
 );
 

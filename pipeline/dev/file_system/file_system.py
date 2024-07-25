@@ -7,13 +7,13 @@ class file_system:
     # detect if a folder exist
     # return the path of a file according to parameters passed
     # provide services that managing file system 
-    def __init__(self,host_pika = 'localhost',host_sql = 'localhost'):
-        self.cnx = mysql.connector.connect(user='root', password='root',
+    def __init__(self,host_pika = '192.168.1.107',host_sql = '192.168.1.107'):
+        self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
                               host=host_sql,
-                              database='tianyudev',port = 8889)
+                              database='tianyudev')
     
     def init_file_system(self,par):
-        path_root = par['path']
+        path_root = par['root_path']
         Path(path_root+"/image").mkdir( parents=True, exist_ok=True)
         Path(path_root+"/logs").mkdir( parents=True, exist_ok=True)
         Path(path_root+"/queue_result/temp").mkdir( parents=True, exist_ok=True)
@@ -26,8 +26,21 @@ class file_system:
         else: #Obtain the path from database
             pass
     
-    def create_path_for_object(self,obj_type,obj_PID):
-        pass
+    def create_dir_for_object(self,obj_type,param_dict):
+        if obj_type=='site':
+            pass
+        if obj_type=='instrument':
+            pass
+        if obj_type=='filter':
+            pass
+        if obj_type=='target':
+            pass
+        if obj_type=='observation':
+            pass
+        if obj_type=='img':#batch+imgtype
+            pass
+    def get_dir_for_object(self,obj_type,obj_PID):
+            pass
 
-    
+
 
