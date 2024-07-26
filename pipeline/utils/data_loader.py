@@ -6,17 +6,33 @@ import numpy as np
 import pandas as pd
 class data_loader:
     def __init__(self):
-        self.cnx = mysql.connector.connect(user='root', password='',
-                            host='127.0.0.1',
-                            database='mgo')
+        self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
+                            host='192.168.1.107',
+                            database='tianyudev')
         self.observation_type_id = self.get_table_dict("observation_type")
         self.target_id = self.get_table_dict("target_n")
         self.image_type_id = self.get_table_dict("image_type")
         self.instrument_id = self.get_table_dict("instrument")
         self.site_id = self.get_table_dict("obs_site")
         self.observer_id = self.get_table_dict("observer")
-        self.gdr3_variable_class = self.get_table_dict("gdr3_variable_class")
+        #self.gdr3_variable_class = self.get_table_dict("gdr3_variable_class")
         print(self.observation_type_id,self.target_id,self.image_type_id,self.instrument_id,self.site_id,self.observer_id)
+    def register(self,PID,cmd,par):
+        mycursor = self.cnx.cursor()
+        sql = cmd
+        mycursor.execute(sql,par)
+        self.cnx.commit()
+        if sql.split(' ')[2]=='img':#insert PID
+            mycursor = self.cnx.cursor()
+            mycursor.execute("SELECT LAST_INSERT_ID();")
+            myresult = mycursor.fetchall()
+            img_id = myresult[0][0] #auto_increment
+            sql = 'ALTER TABLE img SET birth_process_id=%s where image_id=%s'
+            args = (PID,img_id)
+            mycursor.execute(sql,args)
+            self.cnx.commit()
+
+        return 1
     def read_file(self,filename):
         with open(filename, 'rb') as f:
             file_data = f.read()

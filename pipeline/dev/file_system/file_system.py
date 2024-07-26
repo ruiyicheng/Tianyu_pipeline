@@ -26,21 +26,28 @@ class file_system:
         else: #Obtain the path from database
             pass
     
-    def create_dir_for_object(self,obj_type,param_dict):
-        if obj_type=='site':
-            pass
-        if obj_type=='instrument':
-            pass
-        if obj_type=='filter':
-            pass
-        if obj_type=='target':
-            pass
-        if obj_type=='observation':
-            pass
-        if obj_type=='img':#batch+imgtype
-            pass
-    def get_dir_for_object(self,obj_type,obj_PID):
-            pass
+    def get_dir_for_object(self,obj_type,param_dict):
+        '''
+        return the path of the object
+        '''
+        item_name = ''
+        dir_path = self.path_root
 
+        if obj_type=='observation':
+
+            if 'observation_name' in param_dict:
+                return dir_path,item_name
+            if 'observation_id' in param_dict:
+                return dir_path,item_name
+        if obj_type=='img':#batch+imgtype
+            if 'birth_PID' in param_dict:
+                return dir_path,item_name
+            if 'observation_name' in param_dict:
+                return dir_path,item_name
+            if 'observation_id' in param_dict:
+                return dir_path,item_name
+    def create_dir_for_object(self,obj_type,param_dict):
+            dir_path,_ = self.get_dir_for_object(obj_type,param_dict)
+            Path(dir_path).mkdir( parents=True, exist_ok=True)
 
 

@@ -8,6 +8,15 @@ class process_publisher:
         self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
                               host=host_sql,
                               database='tianyudev')
+        self._default_site_id = 1
+        self._default_group_id = 1
+    @property
+    def default_site_id(self):
+        return
+    
+    @property
+    def consume_group_id(self):
+        return
     def generate_PID(self):
         return (time.time_ns()+np.random.randint(0,1000))*100000+np.random.randint(0,100000)
     
@@ -16,9 +25,13 @@ class process_publisher:
         pass
     def align(self,PID):
         pass
-    
-    def register_info(self,param_dict):
-        pass
+
+    def register_info(self,param_dict,consume_site_id=self.default_site_id,consume_group_id=self.default_group_id):
+        '''
+        example: register_info({'cmd':"INSERT INTO tabname (.....) VALUES (%s,%s.....);",'args':'(,)'})
+        '''
+        PID_this = self.publish_CMD(consume_site_id,consume_group_id,f'register|{param_dict}',[])
+        return PID_this
     def stacking(self,consume_site_id,consume_group_id,PIDs,num_image_limit = 5):
         Next_hierarchy_PID_list = []
         for i in range((len(PIDs)-1)//num_image_limit+1):
@@ -30,7 +43,7 @@ class process_publisher:
                 Next_hierarchy_PID_list.append(stack_this[0])
 
         if len(Next_hierarchy_PID_list)>1:
-            PID_ret = self.stacking(consume_site_id,consume_group_id,Next_hierarchy_PID_list,num_image_limit)
+            PID_ret = self.stacking(consume_site_id,consume_group_id,Next_hierarchy_PID_list,num_image_limit=num_image_limit)
         else:
             return PID_this
         return PID_ret
@@ -41,7 +54,7 @@ class process_publisher:
 
         mycursor = self.cnx.cursor()
         sql = "INSERT INTO process (process_id,process_cmd,process_status_id,process_site_id,process_group_id) VALUES (%s, %s,1,%s,%s)"
-        argsql = (PID_this,CMD,process_site)
+        argsql = (PID_this,CMD,process_site,process_group)
         mycursor.execute(sql, argsql)
         self.cnx.commit()
         for PID_dep in dep_PID_list:

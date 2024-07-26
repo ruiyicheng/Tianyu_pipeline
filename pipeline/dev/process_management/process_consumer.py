@@ -6,7 +6,7 @@ import mysql.connector
 import json
 import socket
 
-#from Tianyu_pipeline.pipeline.template_generating import image_alignment as il
+from Tianyu_pipeline.pipeline.utils import data_loader as dl
 #from Tianyu_pipeline.pipeline.dev.file_system import file_system as fs
 
 
@@ -21,6 +21,7 @@ class process_consumer:
         self.connection = pika.BlockingConnection(
         pika.ConnectionParameters(host=self.pika_host))
         self.channel = self.connection.channel()
+        self.dl = dl.data_loader()
         self.channel.queue_declare(queue=f'command_queue_{self.site_id}_{self.group_id}', durable=True)
     def queue_db(self,sql,argsql):
         mycursor = self.cnx.cursor()
@@ -62,7 +63,7 @@ class process_consumer:
         if cmd == 'init_dir':
             pass
         if cmd == 'register':
-            pass
+            success  = self.dl.register(PID,par['cmd'],par['args'])
         if cmd == 'capture':
             pass
         if cmd == 'data_deliver':
@@ -75,9 +76,9 @@ class process_consumer:
             pass
         if cmd == 'alignment':
             pass
-        time.sleep(0.5)
+        #time.sleep(0.5)
         #return 0
-        return 1
+        return success
     def callback(self,ch, method, properties, body):
         print(f" [x] Received {body.decode()}, changing db...")
         PID,cmd,par = self.resolve_msg(body.decode())

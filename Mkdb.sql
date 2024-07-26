@@ -34,8 +34,6 @@ CREATE TABLE observation_type(
 
 CREATE TABLE filters(
     filter_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    process_id DECIMAL(25),
-    FOREIGN KEY (process_id) REFERENCES process(process_id),
     filter_name TEXT
 );
 
@@ -44,19 +42,15 @@ CREATE TABLE instrument(
     instrument_name TEXT,
     filter_id INT,
     local_folder_path TEXT,
-    process_id DECIMAL(25),
-    FOREIGN KEY (filter_id) REFERENCES filters(filter_id),
-    FOREIGN KEY (process_id) REFERENCES process(process_id)
+    FOREIGN KEY (filter_id) REFERENCES filters(filter_id)
 );
 
 CREATE TABLE obs_site(
     process_site_id INT,
     obs_site_name TEXT,
-    process_id DECIMAL(25),
     obs_site_lon DOUBLE DEFAULT NULL,
     obs_site_lat DOUBLE DEFAULT NULL,
     obs_site_height DOUBLE DEFAULT NULL,
-    FOREIGN KEY (process_id) REFERENCES process(process_id),
     FOREIGN KEY (process_site_id) REFERENCES data_process_site(process_site_id) 
 );
 
@@ -64,7 +58,7 @@ CREATE TABLE obs_site(
 CREATE TABLE data_process_group(
 	process_group_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
     process_site_id INT NOT NULL,
-    is_GPU BOOLEAN DEFAULT 0
+    property_flag INT DEFAULT 0
 );
 
 
@@ -73,20 +67,12 @@ CREATE TABLE data_process_site(
     file_path TEXT,
     process_site_name TEXT,
     process_site_ip TEXT,
-    mysql_user_name TEXT,
-    mysql_user_psw TEXT
+    process_site_flag INT,
+    process_site_root_path TEXT
 );
  INSERT INTO data_process_site (process_site_name,process_site_ip,mysql_user_name,mysql_user_psw) values ('macbook','127.0.0.1','root','root');
 
-CREATE TABLE data_process_site_info(
-	process_site_id INT NOT NULL,
-    site_status_id INT NOT NULL
-);
 
-CREATE TABLE data_process_site_status(
-	site_status_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    site_status TEXT
-);
 
 INSERT INTO data_process_site_status (site_status) VALUES ("is_img_store_site");
 INSERT INTO data_process_site_status (site_status) VALUES ("is_sql_site");
@@ -160,6 +146,7 @@ CREATE TABLE img(
     bjd_tdb_mid_approximation DOUBLE DEFAULT NULL,
     bjd_tdb_end_approximation DOUBLE DEFAULT NULL,
     n_stack INT DEFAULT 1,
+    n_star_resolved INT,
     batch INT DEFAULT 1,
     processed BOOLEAN DEFAULT 0, 
     image_type_id INT,
@@ -201,12 +188,20 @@ CREATE TABLE sky(
     fov_x DOUBLE DEFAULT NULL,
     fov_y DOUBLE DEFAULT NULL,
     scan_angle DOUBLE DEFAULT 0,
-    template_image_id BIGINT,
     fov_pos GEOMETRY SRID 4326,
     process_id DECIMAL(25),
     FOREIGN KEY (process_id) REFERENCES process(process_id),
     FOREIGN KEY (template_image_id) REFERENCES img(image_id)
 );
+
+
+CREATE TABLE sky_template_map(
+sky_id BIGINT,
+template_image_id BIGINT,
+in_use BOOLEAN DEFAULT 0,
+FOREIGN KEY (sky_id) REFERENCES img(image_id),
+FOREIGN KEY (template_image_id) REFERENCES img(image_id)
+};
 
 CREATE TABLE source_type(
     source_type_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
@@ -267,9 +262,17 @@ CREATE TABLE star_pixel_img(
 
 CREATE TABLE reference_star(
     obs_id INT,
-    star_id BIGINT,
+    source_id BIGINT,
    FOREIGN KEY (obs_id) REFERENCES observation(obs_id),
-    FOREIGN KEY (star_id) REFERENCES star(star_id)
+    FOREIGN KEY (source_id) REFERENCES star(source_id)
+);
+
+
+
+CREATE TABLE source_crossmatch(
+    gdr3_id BIGINT,
+    panstarr_id BIGINT,
+    source_id BIGINT
 );
 
 
