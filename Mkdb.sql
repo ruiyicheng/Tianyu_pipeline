@@ -139,6 +139,7 @@ CREATE TABLE image_type(
 
 CREATE TABLE img(
     image_id BIGINT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    store_site_id INT,
     jd_utc_start DOUBLE DEFAULT NULL,
     jd_utc_mid DOUBLE DEFAULT NULL,
     jd_utc_end DOUBLE DEFAULT NULL,
@@ -160,6 +161,7 @@ CREATE TABLE img(
     birth_process_id DECIMAL(25),
     align_process_id DECIMAL(25),
     deleted BOOLEAN DEFAULT 0,
+    FOREIGN KEY (store_site_id) REFERENCES data_process_site(process_site_id),
     FOREIGN KEY (birth_process_id) REFERENCES process(process_id),
     FOREIGN KEY (align_process_id) REFERENCES process(process_id),
     FOREIGN KEY (image_type_id) REFERENCES image_type(image_type_id),
@@ -201,7 +203,7 @@ template_image_id BIGINT,
 in_use BOOLEAN DEFAULT 0,
 FOREIGN KEY (sky_id) REFERENCES img(image_id),
 FOREIGN KEY (template_image_id) REFERENCES img(image_id)
-};
+);
 
 CREATE TABLE source_type(
     source_type_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
@@ -276,24 +278,23 @@ CREATE TABLE source_crossmatch(
 );
 
 
-INSERT INTO filters (filter_name) values ("l");
-INSERT INTO filters (filter_name) values ("r");
-INSERT INTO filters (filter_name) values ("g");
-INSERT INTO filters (filter_name) values ("b");
+INSERT INTO filters (filter_name) values ("L");
+INSERT INTO filters (filter_name) values ("R");
+INSERT INTO filters (filter_name) values ("G");
+INSERT INTO filters (filter_name) values ("B");
 INSERT INTO filters (filter_name) values ("Halpha");
 INSERT INTO filters (filter_name) values ("OIII");
 INSERT INTO filters (filter_name) values ("SII");
 INSERT INTO filters (filter_name) values ("Solar");
-INSERT INTO filters (filter_name) values ("none");
+INSERT INTO filters (filter_name) values ("Dark");
+INSERT INTO filters (filter_name) values ("None");
 
-INSERT INTO image_type (image_type) values ("science_raw");
-INSERT INTO image_type (image_type) values ("science_processed");
+INSERT INTO image_type (image_type) values ("raw");
+INSERT INTO image_type (image_type) values ("processed");
 INSERT INTO image_type (image_type) values ("flat_raw");
 INSERT INTO image_type (image_type) values ("flat_debiased");
 INSERT INTO image_type (image_type) values ("dark");
 INSERT INTO image_type (image_type) values ("bias");
-INSERT INTO image_type (image_type) values ("deep_raw");
-INSERT INTO image_type (image_type) values ("deep_processed");
 INSERT INTO image_type (image_type) values ("mask");
 
 INSERT INTO instrument (instrument_name,filter_id) VALUES ("L350+QHY600m",1);
