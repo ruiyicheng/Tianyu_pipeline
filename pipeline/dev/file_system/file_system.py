@@ -1,7 +1,7 @@
 import os
 import mysql.connector
 from pathlib import Path
-
+import Tianyu_pipeline.pipeline.utils.process_site_getter as psg
 class file_system:
     # create a file system if not created
     # detect if a folder exist
@@ -11,7 +11,8 @@ class file_system:
         self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
                               host=host_sql,
                               database='tianyudev')
-    
+        self.psg = psg.process_site_getter()
+        self.site_info = self.psg.get_channel()
     def init_file_system(self,par):
         path_root = par['root_path']
         Path(path_root+"/image").mkdir( parents=True, exist_ok=True)
@@ -24,7 +25,9 @@ class file_system:
         if hasattr(self,"_path_root"):
             return self._path_root
         else: #Obtain the path from database
-            pass
+            self._path_root = self.site_info['file_path']
+            return self._path_root
+            
     
     def get_dir_for_object(self,obj_type,param_dict):
         '''
@@ -34,11 +37,13 @@ class file_system:
         dir_path = self.path_root
 
         if obj_type=='observation':
-
+            if 'full_observation_info' in param_dict:
+                return dir_path,item_name
             if 'observation_name' in param_dict:
                 return dir_path,item_name
             if 'observation_id' in param_dict:
                 return dir_path,item_name
+            
         if obj_type=='img':#batch+imgtype
             if 'birth_PID' in param_dict:
                 return dir_path,item_name
