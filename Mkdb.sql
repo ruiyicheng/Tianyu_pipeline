@@ -8,8 +8,11 @@ CREATE TABLE data_process_site(
     process_site_name TEXT,
     process_site_ip TEXT,
     process_site_flag INT,
-    process_site_root_path TEXT
+    user_name TEXT
 );
+alter table data_process_site ADD column user_name TEXT;
+alter table data_process_site  drop process_site_root_path;
+show columns from data_process_site;
 DROP TABLE data_process_group;
 CREATE TABLE data_process_group(
 	process_group_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
@@ -297,6 +300,11 @@ CREATE TABLE source_crossmatch(
     panstarr_id BIGINT,
     source_id BIGINT
 );
+--site flag: 1:is_sql_server; 2:is pika server; 4: store the image; 8:telescope control; 16 data process center; 32 mission publisher; 64 visialization center
+
+INSERT INTO data_process_site (process_site_name,process_site_ip,process_site_flag,file_path,user_name) VALUES ('macbook_rui','192.168.1.100',96,'/Users/ruiyicheng/Documents/code/projects/TianYu/debug_Tianyu_file_system','ruiyicheng');
+INSERT INTO data_process_site (process_site_name,process_site_ip,process_site_flag,file_path,user_name) VALUES ('control_desktop','192.168.1.106',40,'/mnt/d/Tianyu_data','root');
+INSERT INTO data_process_site (process_site_name,process_site_ip,process_site_flag,file_path,user_name) VALUES ('data_desktop','192.168.1.107',55,'/media/test/nf/mgo_data','test');
 
 
 INSERT INTO filters (filter_name) values ("L");

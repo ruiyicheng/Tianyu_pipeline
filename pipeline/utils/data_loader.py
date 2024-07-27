@@ -10,7 +10,7 @@ class data_loader:
                             host='192.168.1.107',
                             database='tianyudev')
         self.observation_type_id = self.get_table_dict("observation_type")
-        self.target_id = self.get_table_dict("source")
+        self.target_id = self.get_table_dict("tianyu_source")
         self.image_type_id = self.get_table_dict("image_type")
         self.instrument_id = self.get_table_dict("instrument")
         self.site_id = self.get_table_dict("obs_site")
