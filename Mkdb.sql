@@ -1,5 +1,34 @@
+DROP DATABASE tianyudev;
+CREATE database tianyudev;
 use tianyudev;
-CREATE TABLE process(
+
+CREATE TABLE data_process_site(
+	process_site_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    file_path TEXT,
+    process_site_name TEXT,
+    process_site_ip TEXT,
+    process_site_flag INT,
+    process_site_root_path TEXT
+);
+DROP TABLE data_process_group;
+CREATE TABLE data_process_group(
+	process_group_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    process_site_id INT NOT NULL,
+    property_flag INT DEFAULT 0,
+    FOREIGN KEY (process_site_id) REFERENCES data_process_site(process_site_id)
+);
+
+CREATE TABLE process_type(
+    process_status_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    process_status TEXT
+);
+
+
+
+
+
+
+CREATE TABLE process_list(
     process_id DECIMAL(25) UNIQUE NOT NULL PRIMARY KEY,
     process_cmd TEXT,
     process_status_id INT,
@@ -15,9 +44,10 @@ DROP TABLE process;
 CREATE TABLE process_dependence(
     master_process_id DECIMAL(25),
     dependence_process_id DECIMAL(25),
-    FOREIGN KEY (master_process_id) REFERENCES process(process_id),
-    FOREIGN KEY (dependence_process_id) REFERENCES process(process_id)
+    FOREIGN KEY (master_process_id) REFERENCES process_list(process_id),
+    FOREIGN KEY (dependence_process_id) REFERENCES process_list(process_id)
 );
+
 
 DROP TABLE process_dependence;
 INSERT INTO process_type (process_status) VALUES ("WAITING");
@@ -40,12 +70,15 @@ CREATE TABLE filters(
 CREATE TABLE instrument(
     instrument_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
     instrument_name TEXT,
+    x_resolution INT,
+    y_resolution INT,
     filter_id INT,
     local_folder_path TEXT,
     FOREIGN KEY (filter_id) REFERENCES filters(filter_id)
 );
-
+DROP TABLE obs_site;
 CREATE TABLE obs_site(
+	obs_site_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
     process_site_id INT,
     obs_site_name TEXT,
     obs_site_lon DOUBLE DEFAULT NULL,
@@ -55,21 +88,7 @@ CREATE TABLE obs_site(
 );
 
 
-CREATE TABLE data_process_group(
-	process_group_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    process_site_id INT NOT NULL,
-    property_flag INT DEFAULT 0
-);
 
-
-CREATE TABLE data_process_site(
-	process_site_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    file_path TEXT,
-    process_site_name TEXT,
-    process_site_ip TEXT,
-    process_site_flag INT,
-    process_site_root_path TEXT
-);
  INSERT INTO data_process_site (process_site_name,process_site_ip,mysql_user_name,mysql_user_psw) values ('macbook','127.0.0.1','root','root');
 
 
@@ -107,9 +126,7 @@ CREATE TABLE target_n(
     target_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
     target_name TEXT,
     target_type_id INT,
-    process_id DECIMAL(25),
-    FOREIGN KEY (target_type_id) REFERENCES target_type(target_type_id),
-    FOREIGN KEY (process_id) REFERENCES process(process_id)
+    FOREIGN KEY (target_type_id) REFERENCES target_type(target_type_id)
 );
 
 CREATE TABLE observation(
@@ -122,7 +139,8 @@ CREATE TABLE observation(
     obs_site_id INT DEFAULT NULL,
     observer_id INT  DEFAULT NULL,
     process_id DECIMAL(25),
-    FOREIGN KEY (process_id) REFERENCES process(process_id),
+    bin_size INT DEFAULT 1,
+    FOREIGN KEY (process_id) REFERENCES process_list(process_id),
     FOREIGN KEY (observation_type_id) REFERENCES observation_type(observation_type_id),
     FOREIGN KEY (target_id) REFERENCES target_n(target_id),
     FOREIGN KEY (instrument_id) REFERENCES instrument(instrument_id) ,
@@ -135,7 +153,6 @@ CREATE TABLE image_type(
     image_type TEXT
 );
 
---whether extracted information
 
 CREATE TABLE img(
     image_id BIGINT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
@@ -161,9 +178,10 @@ CREATE TABLE img(
     birth_process_id DECIMAL(25),
     align_process_id DECIMAL(25),
     deleted BOOLEAN DEFAULT 0,
+    is_mask BOOLEAN DEFAULT 0,
     FOREIGN KEY (store_site_id) REFERENCES data_process_site(process_site_id),
-    FOREIGN KEY (birth_process_id) REFERENCES process(process_id),
-    FOREIGN KEY (align_process_id) REFERENCES process(process_id),
+    FOREIGN KEY (birth_process_id) REFERENCES process_list(process_id),
+    FOREIGN KEY (align_process_id) REFERENCES process_list(process_id),
     FOREIGN KEY (image_type_id) REFERENCES image_type(image_type_id),
     FOREIGN KEY (flat_image_id) REFERENCES img(image_id),
     FOREIGN KEY (dark_image_id) REFERENCES img(image_id),
@@ -183,6 +201,9 @@ CREATE TABLE img_stacking(
 --clockwise x is ra+ when 
 -- NOT NULL DEFAULT ST_SRID(POINT(0,0),4326),SPATIAL INDEX(fov_pos),
 
+
+
+
 CREATE TABLE sky(
     sky_id BIGINT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
     ra DOUBLE DEFAULT NULL,
@@ -192,8 +213,7 @@ CREATE TABLE sky(
     scan_angle DOUBLE DEFAULT 0,
     fov_pos GEOMETRY SRID 4326,
     process_id DECIMAL(25),
-    FOREIGN KEY (process_id) REFERENCES process(process_id),
-    FOREIGN KEY (template_image_id) REFERENCES img(image_id)
+    FOREIGN KEY (process_id) REFERENCES process_list(process_id)
 );
 
 
@@ -211,7 +231,7 @@ CREATE TABLE source_type(
 );
 
 
-CREATE TABLE source(
+CREATE TABLE tianyu_source(
     source_id BIGINT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
     source_type_id INT NOT NULL,
     sky_id BIGINT,
@@ -226,7 +246,7 @@ CREATE TABLE source(
 
 CREATE TABLE star_pixel_img(
     star_pixel_img_id BIGINT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    star_id BIGINT,
+    source_id BIGINT,
     image_id BIGINT,
     flux_raw DOUBLE,
     flux_relative DOUBLE,
@@ -247,18 +267,19 @@ CREATE TABLE star_pixel_img(
     normalization_process_id DECIMAL(25),
     mag_calibration_process_id DECIMAL(25),
     timing_process_id DECIMAL(25),
-    FOREIGN KEY (birth_process_id) REFERENCES process(process_id),
-    FOREIGN KEY (relative_process_id) REFERENCES process(process_id),
-    FOREIGN KEY (normalization_process_id) REFERENCES process(process_id),
-    FOREIGN KEY (mag_calibration_process_id) REFERENCES process(process_id),
-    FOREIGN KEY (timing_process_id) REFERENCES process(process_id),
+    FOREIGN KEY (birth_process_id) REFERENCES process_list(process_id),
+    FOREIGN KEY (relative_process_id) REFERENCES process_list(process_id),
+    FOREIGN KEY (normalization_process_id) REFERENCES process_list(process_id),
+    FOREIGN KEY (mag_calibration_process_id) REFERENCES process_list(process_id),
+    FOREIGN KEY (timing_process_id) REFERENCES process_list(process_id),
     INDEX(bjd_tdb_start),
     INDEX(bjd_tdb_mid),
     INDEX(bjd_tdb_end),
     INDEX(flux_raw),
-    INDEX(flux_calibrated),
-    INDEX(flux_normalized),
-    FOREIGN KEY (star_id) REFERENCES star(star_id),
+    INDEX(flux_relative),
+    INDEX(flux_relative),
+    INDEX(mag_calibrated_absolute),
+    FOREIGN KEY (source_id) REFERENCES tianyu_source(source_id),
     FOREIGN KEY (image_id) REFERENCES img(image_id)
 );
 
@@ -266,7 +287,7 @@ CREATE TABLE reference_star(
     obs_id INT,
     source_id BIGINT,
    FOREIGN KEY (obs_id) REFERENCES observation(obs_id),
-    FOREIGN KEY (source_id) REFERENCES star(source_id)
+    FOREIGN KEY (source_id) REFERENCES tianyu_source(source_id)
 );
 
 
@@ -290,10 +311,13 @@ INSERT INTO filters (filter_name) values ("Dark");
 INSERT INTO filters (filter_name) values ("None");
 
 INSERT INTO image_type (image_type) values ("raw");
-INSERT INTO image_type (image_type) values ("processed");
+INSERT INTO image_type (image_type) values ("calibrated_single");
+INSERT INTO image_type (image_type) values ("calibrated_stacked");
+INSERT INTO image_type (image_type) values ("calibrated_difference");
 INSERT INTO image_type (image_type) values ("flat_raw");
 INSERT INTO image_type (image_type) values ("flat_debiased");
 INSERT INTO image_type (image_type) values ("dark");
+INSERT INTO image_type (image_type) values ("dark_flat");
 INSERT INTO image_type (image_type) values ("bias");
 INSERT INTO image_type (image_type) values ("mask");
 
