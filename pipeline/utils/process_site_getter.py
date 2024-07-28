@@ -1,10 +1,9 @@
-from Tianyu_pipeline.pipeline.utils import data_loader as dl
+from Tianyu_pipeline.pipeline.utils import sql_interface 
 import socket
 
 class process_site_getter:
     def __init__(self):
-        self.dl = dl.data_loader()
-        pass
+        self.sql_interface = sql_interface.sql_interface()
     def get_channel(self):
         hostname = socket.gethostname()
         local_host_list = set(socket.gethostbyname_ex(hostname)[2])
@@ -12,7 +11,7 @@ class process_site_getter:
         #print(local_host_list)
         sql = "SELECT * FROM data_process_site;"
         args = tuple()
-        res = self.dl.query(sql,args)
+        res = self.sql_interface.query(sql,args)
         ip_this = set(res['process_site_ip'])&set(local_host_list)
         assert len(ip_this)==1
         ret = res[res['process_site_ip']==list(ip_this)[0]]

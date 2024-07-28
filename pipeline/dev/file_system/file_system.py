@@ -2,15 +2,14 @@ import os
 import mysql.connector
 from pathlib import Path
 import Tianyu_pipeline.pipeline.utils.process_site_getter as psg
+import Tianyu_pipeline.pipeline.utils.sql_interface as sql_interface
 class file_system:
     # create a file system if not created
     # detect if a folder exist
     # return the path of a file according to parameters passed
     # provide services that managing file system 
     def __init__(self,host_pika = '192.168.1.107',host_sql = '192.168.1.107'):
-        self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
-                              host=host_sql,
-                              database='tianyudev')
+        self.sql_interface = sql_interface.sql_interface()
         self.psg = psg.process_site_getter()
         self.site_info = self.psg.get_channel()
     def init_file_system(self,par):

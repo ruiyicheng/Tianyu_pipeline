@@ -7,15 +7,14 @@ import json
 import socket
 
 from Tianyu_pipeline.pipeline.utils import data_loader as dl
+from Tianyu_pipeline.pipeline.utils import sql_interface
 #from Tianyu_pipeline.pipeline.dev.file_system import file_system as fs
 
 
 
 class process_consumer:
     def __init__(self,mode = 'test',pika_host = "192.168.1.107",site_id=1,group_id = 1,host_sql = '192.168.1.107',user_sql = 'tianyu', password_sql = 'tianyu'):
-        self.cnx = mysql.connector.connect(user=user_sql, password=password_sql,
-                              host=host_sql,
-                              database='tianyudev')
+        self.sql_interface = sql_interface.sql_interface()
         self.pika_host = pika_host
         self.site_id, self.group_id = site_id,group_id
         self.connection = pika.BlockingConnection(
@@ -23,13 +22,13 @@ class process_consumer:
         self.channel = self.connection.channel()
         self.dl = dl.data_loader()
         self.channel.queue_declare(queue=f'command_queue_{self.site_id}_{self.group_id}', durable=True)
-    def queue_db(self,sql,argsql):
-        mycursor = self.cnx.cursor()
-        mycursor.execute(sql,argsql)
-        myresult = mycursor.fetchall()
-        headers = [i[0] for i in mycursor.description]
-        res = pd.DataFrame(myresult,columns = headers,dtype=object)
-        return res
+    # def queue_db(self,sql,argsql):
+    #     mycursor = self.sql_interface.cnx.cursor()
+    #     mycursor.execute(sql,argsql)
+    #     myresult = mycursor.fetchall()
+    #     headers = [i[0] for i in mycursor.description]
+    #     res = pd.DataFrame(myresult,columns = headers,dtype=object)
+    #     return res
     # def get_channel(self):
     #     hostname = socket.gethostname()
     #     local_host_list = set(socket.gethostbyname_ex(hostname)[2])
@@ -82,15 +81,15 @@ class process_consumer:
     def callback(self,ch, method, properties, body):
         print(f" [x] Received {body.decode()}, changing db...")
         PID,cmd,par = self.resolve_msg(body.decode())
-        mycursor = self.cnx.cursor()
+        mycursor = self.sql_interface.cnx.cursor()
         sql = "UPDATE process SET process_status_id = 3 WHERE process_id = %s;"
         argsql = (PID,)
         mycursor.execute(sql,argsql)
-        self.cnx.commit()
+        self.sql_interface.cnx.commit()
 
         success = self.work(PID,cmd,par)
         
-        mycursor = self.cnx.cursor()
+        mycursor = self.sql_interface.cnx.cursor()
         if success:
             suc = 5
         else:
@@ -98,7 +97,7 @@ class process_consumer:
         sql = "UPDATE process SET process_status_id = %s WHERE process_id = %s;"
         argsql = (suc, PID)
         mycursor.execute(sql,argsql)
-        self.cnx.commit()
+        self.sql_interface.cnx.commit()
         print(" [x] Done")
         ch.basic_ack(delivery_tag=method.delivery_tag)
 

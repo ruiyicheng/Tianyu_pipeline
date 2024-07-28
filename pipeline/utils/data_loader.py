@@ -1,45 +1,42 @@
+
 import mysql.connector
 from astropy.io import fits
 import glob
 import tqdm
 import numpy as np
 import pandas as pd
+from Tianyu_pipeline.pipeline.utils import sql_interface 
 class data_loader:
     def __init__(self):
-        self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
-                            host='192.168.1.107',
-                            database='tianyudev')
-        self.observation_type_id = self.get_table_dict("observation_type")
-        self.target_id = self.get_table_dict("tianyu_source")
-        self.image_type_id = self.get_table_dict("image_type")
-        self.instrument_id = self.get_table_dict("instrument")
-        self.site_id = self.get_table_dict("obs_site")
-        self.observer_id = self.get_table_dict("observer")
-        #self.gdr3_variable_class = self.get_table_dict("gdr3_variable_class")
-        print(self.observation_type_id,self.target_id,self.image_type_id,self.instrument_id,self.site_id,self.observer_id)
+        self.sql_interface = sql_interface.sql_interface()
+
+
     def register(self,PID,cmd,par):
-        mycursor = self.cnx.cursor()
+        mycursor = self.sql_interface.cnx.cursor()
         sql = cmd
         mycursor.execute(sql,par)
-        self.cnx.commit()
-        if sql.split(' ')[2]=='img':#insert PID
-            mycursor = self.cnx.cursor()
+        self.sql_interface.cnx.commit()
+        if sql.split(' ')[2]=='img' or sql.split(' ')[2]=='observation':#insert PID
+            mycursor = self.sql_interface.cnx.cursor()
             mycursor.execute("SELECT LAST_INSERT_ID();")
             myresult = mycursor.fetchall()
             img_id = myresult[0][0] #auto_increment
-            sql = 'ALTER TABLE img SET birth_process_id=%s where image_id=%s'
+            if sql.split(' ')[2]=='img':
+                sql = 'ALTER TABLE img SET birth_process_id=%s where image_id=%s;'
+            else:
+                sql = 'ALTER TABLE observation SET process_id=%s where obs_id=%s'
             args = (PID,img_id)
             mycursor.execute(sql,args)
-            self.cnx.commit()
-
+            self.sql_interface.cnx.commit()
         return 1
+    
     def read_file(self,filename):
         with open(filename, 'rb') as f:
             file_data = f.read()
             return file_data
 
     def get_table_dict(self,table,index_key=1,index_value=0):
-        mycursor = self.cnx.cursor()
+        mycursor = self.sql_interface.cnx.cursor()
         mycursor.execute("SELECT * from "+table+";")
         myresult = mycursor.fetchall()
         # print(myresult)
@@ -49,7 +46,7 @@ class data_loader:
         return res_dict
     
     def query(self,sql,args,return_df = True):
-        mycursor = self.cnx.cursor()
+        mycursor = self.sql_interface.cnx.cursor()
         mycursor.execute(sql,args)
         myresult = mycursor.fetchall()
         headers = [i[0] for i in mycursor.description]
@@ -70,13 +67,13 @@ class data_loader:
         n_pic = len(file_path)
 
 
-        mycursor = self.cnx.cursor()
+        mycursor = self.sql_interface.cnx.cursor()
         sql = "INSERT INTO observation (observation_type_id,target_id,n_pic,instrument_id,obs_site_id,observer_id) "+"values ("+str(self.observation_type_id[info["observation_type"]])+","+str(self.target_id[info["target"]])+","+str(n_pic)+","+str(self.instrument_id[info["instrument"]])+","+str(self.site_id[info["obs_site"]])+","+str(self.observer_id[info["observer"]])+")"
         #print(sql)
         mycursor.execute(sql)
-        self.cnx.commit()
+        self.sql_interface.cnx.commit()
 
-        mycursor = self.cnx.cursor()
+        mycursor = self.sql_interface.cnx.cursor()
         mycursor.execute("SELECT LAST_INSERT_ID();")
         myresult = mycursor.fetchall()
         self.obs_id = myresult[0][0] #auto_increment
@@ -89,7 +86,7 @@ class data_loader:
         print('Created observation id=',self.obs_id)
     def load_img_from_fit(self,img_dir,hierarchy = 1,info = {'image_type':'flat_raw'}):
         file_path = sorted(glob.glob(img_dir))
-        mycursor = self.cnx.cursor()
+        mycursor = self.sql_interface.cnx.cursor()
         print('Loading data...')
         for fp in tqdm.tqdm(file_path):
 
@@ -99,10 +96,10 @@ class data_loader:
             jd_utc_end = header['JD']+header['EXPOSURE']/3600/24  
             args = (jd_utc_start,jd_utc_mid,jd_utc_end,self.image_type_id[info['image_type']],fp,self.obs_id,hierarchy)
             #print(self.obs_id)
-            mycursor = self.cnx.cursor()
+            mycursor = self.sql_interface.cnx.cursor()
             sql = "INSERT INTO img (jd_utc_start,jd_utc_mid,jd_utc_end,image_type_id,img_path,obs_id,hierarchy) VALUES (%s,%s,%s,%s,%s,%s,%s)"
             mycursor.execute(sql,args)
-            self.cnx.commit()
+            self.sql_interface.cnx.commit()
 
     def search_GDR3_by_square(self,ra=180,dec=0,fov=1,Gmag_limit = 15):
         def coord_region(ra,dec,scan_angle,fov):
@@ -134,7 +131,7 @@ class data_loader:
             return res
         polycmd = generate_sql_command(ra,dec,fov)
         sql = "select g3.source_id,g3.ra,g3.`dec`,g3.phot_g_mean_mag,g3.parallax,g3.pmra,g3.pmdec,gv.best_class_name_id,gv.best_score from gaia_gost.gdr3 as g3 LEFT JOIN gdr3_variable as gv on gv.gdr3_id=g3.source_id where ST_Within(pos,ST_SRID(ST_PolyFromText('"+polycmd+"'),4326)) and g3.phot_g_mean_mag<"+str(Gmag_limit)+";"
-        mycursor = self.cnx.cursor()
+        mycursor = self.sql_interface.cnx.cursor()
         mycursor.execute(sql)
         myresult = mycursor.fetchall()
         return myresult
