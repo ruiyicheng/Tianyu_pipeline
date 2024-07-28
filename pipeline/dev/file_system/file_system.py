@@ -33,23 +33,85 @@ class file_system:
         return the path of the object
         '''
         item_name = ''
-        dir_path = self.path_root
+        #dir_path = self.path_root
 
         if obj_type=='observation':
             if 'full_observation_info' in param_dict:
-                return dir_path,item_name
-            if 'observation_name' in param_dict:
-                return dir_path,item_name
+                result_dict = param_dict
+
+                
+            if 'observation_pid' in param_dict:
+                sql = '''SELECT site.obs_site_name as site_name,ins.instrument_name as instrument_name, tg.target_name as target_name, filters.filter_name as filter_name, obs.process_id as pid FROM observation as obs 
+LEFT JOIN target_n AS tg 
+ON tg.target_id = obs.target_id
+LEFT JOIN instrument AS ins
+ON ins.instrument_id = obs.instrument_id
+LEFT JOIN obs_site AS site
+ON site.obs_site_id= obs.site_id
+LEFT JOIN filters
+ON filters.filter_id = ins.filter_id
+WHERE obs.process_id=%s;'''
+                args = (param_dict['observation_pid'],)
+                result = self.sql_interface.query(sql,args)
+                assert len(result)==1
+                result_dict = result.to_dict('records')[0]
+
             if 'observation_id' in param_dict:
-                return dir_path,item_name
-            
+                sql = '''SELECT site.obs_site_name as site_name,ins.instrument_name as instrument_name, tg.target_name as target_name, filters.filter_name as filter_name, obs.process_id as pid FROM observation as obs 
+LEFT JOIN target_n AS tg 
+ON tg.target_id = obs.target_id
+LEFT JOIN instrument AS ins
+ON ins.instrument_id = obs.instrument_id
+LEFT JOIN obs_site AS site
+ON site.obs_site_id= obs.site_id
+LEFT JOIN filters
+ON filters.filter_id = ins.filter_id
+WHERE obs.obs_id=%s;'''
+                args = (param_dict['observation_id'],)
+                result = self.sql_interface.query(sql,args)
+                assert len(result)==1
+                result_dict = result.to_dict('records')[0]
+            site_name = result_dict['site_name']           
+            instrument_name = result_dict['instrument_name']
+            target_name = result_dict['target_name']
+            filter_name = result_dict['filter_name']
+            process_id = result_dict['pid']
+            dir_path = self.path_root+f'/image/{site_name}/{instrument_name}/{target_name}/{filter_name}/{process_id}'
+
+            return dir_path,item_name
+        
         if obj_type=='img':#batch+imgtype
-            if 'birth_PID' in param_dict:
-                return dir_path,item_name
-            if 'observation_name' in param_dict:
-                return dir_path,item_name
-            if 'observation_id' in param_dict:
-                return dir_path,item_name
+            if 'birth_pid' in param_dict:
+                sql = '''SELECT img.batch AS batch, imgt.image_type as image_type, img.is_mask as is_mask, imgt.image_type, img.obs_id as obs_id,img.img_name as img_name FROM img
+LEFT JOIN image_type AS imgt ON imgt.image_type_id = img.image_type_id
+WHERE img.birth_PID = %s; 
+''' 
+                args = (param_dict['birth_pid'],)
+                result = self.sql_interface.query(sql,args)
+                assert len(result)==1
+                result_dict = result.to_dict('records')[0]
+            if 'image_id' in param_dict:
+                sql = '''SELECT img.batch AS batch, imgt.image_type as image_type, img.is_mask as is_mask, img.obs_id as obs_id,img.img_name as img_name FROM img
+LEFT JOIN image_type AS imgt ON imgt.image_type_id = img.image_type_id
+WHERE img.image_id = %s; 
+''' 
+                args = (param_dict['image_id'],)
+                result = self.sql_interface.query(sql,args)
+                assert len(result)==1
+                result_dict = result.to_dict('records')[0]
+            obs_path = self.get_dir_for_object('observation',{'observation_id':result_dict['obs_id']})
+            batch_name = result_dict['batch']
+            type_name = result_dict['image_type']
+            
+            
+            if not result_dict['is_mask']:
+                img_mask = 'frame'
+            else:
+                img_mask = 'mask'
+            item_name = result_dict['img_name']
+
+            return obs_path+f'/{batch_name}/{type_name}/{img_mask}',item_name
+        
     def create_dir_for_object(self,obj_type,param_dict):
             dir_path,_ = self.get_dir_for_object(obj_type,param_dict)
             Path(dir_path).mkdir( parents=True, exist_ok=True)

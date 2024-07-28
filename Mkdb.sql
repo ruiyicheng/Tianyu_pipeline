@@ -177,7 +177,7 @@ CREATE TABLE img(
     x_to_template INT DEFAULT NULL,
     y_to_template INT DEFAULT NULL,
     obs_id INT DEFAULT NULL,
-    img_path TEXT DEFAULT NULL,
+    img_name TEXT DEFAULT NULL,
     birth_process_id DECIMAL(25),
     align_process_id DECIMAL(25),
     deleted BOOLEAN DEFAULT 0,
@@ -193,6 +193,9 @@ CREATE TABLE img(
     INDEX(jd_utc_mid)
 );
 
+SHOW COLUMNS from img;
+ALTER TABLE img DROP column img_path;
+ALTER TABLE img ADD column img_name TEXT;
 CREATE TABLE img_stacking(
     image_id BIGINT  NOT NULL,
     stacked_id BIGINT NOT NULL,
@@ -300,7 +303,13 @@ CREATE TABLE source_crossmatch(
     panstarr_id BIGINT,
     source_id BIGINT
 );
---site flag: 1:is_sql_server; 2:is pika server; 4: store the image; 8:telescope control; 16 data process center; 32 mission publisher; 64 visialization center
+#--site flag: 1:is_sql_server; 2:is pika server; 4: store the image; 8:telescope control; 16 data process center; 32 mission publisher; 64 visialization center
+#;
+
+
+
+
+
 
 INSERT INTO data_process_site (process_site_name,process_site_ip,process_site_flag,file_path,user_name) VALUES ('macbook_rui','192.168.1.100',96,'/Users/ruiyicheng/Documents/code/projects/TianYu/debug_Tianyu_file_system','ruiyicheng');
 INSERT INTO data_process_site (process_site_name,process_site_ip,process_site_flag,file_path,user_name) VALUES ('control_desktop','192.168.1.106',40,'/mnt/d/Tianyu_data','root');
