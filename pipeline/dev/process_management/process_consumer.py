@@ -52,8 +52,9 @@ class process_consumer:
             par = "{}"
         if len(res)==3:
             par = res[2]
-        print(par)
+        par = par.replace("'",'"')
         par = json.loads(par.replace("'",'"'))
+
         return PID,cmd,par
     def work(self,PID,cmd,par):
         print(f'Executing process {PID}, command {cmd} with parameter {par}')
