@@ -46,7 +46,7 @@ class process_manager:
         # df_processes.columns = headers
     def scan_waiting_process(self,look_for_day = 1):
         d2ns = 24*3600*10**9
-        sql = "SELECT * FROM process WHERE process_id > %s and (process_status_id=1 or process_status_id=4);"
+        sql = "SELECT * FROM process_list WHERE process_id > %s and (process_status_id=1 or process_status_id=4);"
         argsql = ((time.time_ns()-d2ns*look_for_day)*100000,)
         df_processes = self.queue_db(sql,argsql)
         # sql = "SELECT * FROM process as p WHERE p.process_id > %s JOIN process_dependence AS pd ON pd.master_process_id = p.process_id or pd.dependence_process_id = p.process_id; "
@@ -66,7 +66,7 @@ class process_manager:
         message = str(process_id)+"|"+process_cmd   # Format of cmd should be cmdname|{par.json}
         mycursor = self.cnx.cursor()
 
-        sql = "UPDATE process SET process_status_id = 2 WHERE process_id = %s;"
+        sql = "UPDATE process_list SET process_status_id = 2 WHERE process_id = %s;"
         argsql = (process_id,)
         mycursor.execute(sql,argsql)
         self.send(site_id,message)
@@ -79,7 +79,7 @@ class process_manager:
             print(len(df_p),'unfinished process detected')
 
             for i,r in df_p.iterrows():
-                sql = "SELECT * FROM process where process_id in (SELECT dependence_process_id from process as p JOIN process_dependence AS pd ON pd.master_process_id = p.process_id where pd.master_process_id = %s) and process_status_id!=5;"
+                sql = "SELECT * FROM process_list where process_id in (SELECT dependence_process_id from process_list as p JOIN process_dependence AS pd ON pd.master_process_id = p.process_id where pd.master_process_id = %s) and process_status_id!=5;"
                 argsql = (r['process_id'],)
                 res = self.queue_db(sql,argsql)
                 #print(res)
