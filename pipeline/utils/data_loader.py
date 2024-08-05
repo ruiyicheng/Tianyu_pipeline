@@ -12,26 +12,25 @@ class data_loader:
 
 
     def register(self,PID,cmd,par):
-        try:
+
+        mycursor = self.sql_interface.cnx.cursor()
+        sql = cmd
+        mycursor.execute(sql,par)
+        self.sql_interface.cnx.commit()
+        if sql.split(' ')[2]=='img' or sql.split(' ')[2]=='observation':#insert PID
             mycursor = self.sql_interface.cnx.cursor()
-            sql = cmd
-            mycursor.execute(sql,par)
+            mycursor.execute("SELECT LAST_INSERT_ID();")
+            myresult = mycursor.fetchall()
+            img_id = myresult[0][0] #auto_increment
+            if sql.split(' ')[2]=='img':
+                sql = 'ALTER TABLE img SET birth_process_id=%s where image_id=%s;'
+            else:
+                sql = 'ALTER TABLE observation SET process_id=%s where obs_id=%s'
+            args = (PID,img_id)
+            mycursor.execute(sql,args)
             self.sql_interface.cnx.commit()
-            if sql.split(' ')[2]=='img' or sql.split(' ')[2]=='observation':#insert PID
-                mycursor = self.sql_interface.cnx.cursor()
-                mycursor.execute("SELECT LAST_INSERT_ID();")
-                myresult = mycursor.fetchall()
-                img_id = myresult[0][0] #auto_increment
-                if sql.split(' ')[2]=='img':
-                    sql = 'ALTER TABLE img SET birth_process_id=%s where image_id=%s;'
-                else:
-                    sql = 'ALTER TABLE observation SET process_id=%s where obs_id=%s'
-                args = (PID,img_id)
-                mycursor.execute(sql,args)
-                self.sql_interface.cnx.commit()
-            return 1
-        except:
-            return 0
+        return 1
+
     
     def read_file(self,filename):
         with open(filename, 'rb') as f:

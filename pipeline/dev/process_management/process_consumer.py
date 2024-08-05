@@ -79,6 +79,8 @@ class process_consumer:
             pass
         #time.sleep(0.5)
         #return 0
+        if success:
+            print("Success!")
         return success
     def callback(self,ch, method, properties, body):
         print(f" [x] Received {body.decode()}, changing db...")
