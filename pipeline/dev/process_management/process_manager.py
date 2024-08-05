@@ -62,14 +62,14 @@ class process_manager:
             # argsql = (time.time_ns()-d2ns*look_for_day,)
             # df_processes = self.queue_db(sql,argsql)
             # return df_processes
-    def submit_mission(self,site_id,process_id,process_cmd): #change mission status and submit mission to queue
+    def submit_mission(self,site_id,group_id,process_id,process_cmd): #change mission status and submit mission to queue
         message = str(process_id)+"|"+process_cmd   # Format of cmd should be cmdname|{par.json}
         mycursor = self.cnx.cursor()
 
         sql = "UPDATE process_list SET process_status_id = 2 WHERE process_id = %s;"
         argsql = (process_id,)
         mycursor.execute(sql,argsql)
-        self.send(site_id,message)
+        self.send(site_id,group_id,message)
         self.cnx.commit()
 
     def spin(self):
