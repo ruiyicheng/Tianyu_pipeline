@@ -82,7 +82,7 @@ class process_consumer:
         print(f" [x] Received {body.decode()}, changing db...")
         PID,cmd,par = self.resolve_msg(body.decode())
         mycursor = self.sql_interface.cnx.cursor()
-        sql = "UPDATE process SET process_status_id = 3 WHERE process_id = %s;"
+        sql = "UPDATE process_list SET process_status_id = 3 WHERE process_id = %s;"
         argsql = (PID,)
         mycursor.execute(sql,argsql)
         self.sql_interface.cnx.commit()
@@ -94,7 +94,7 @@ class process_consumer:
             suc = 5
         else:
             suc = 4
-        sql = "UPDATE process SET process_status_id = %s WHERE process_id = %s;"
+        sql = "UPDATE process_list SET process_status_id = %s WHERE process_id = %s;"
         argsql = (suc, PID)
         mycursor.execute(sql,argsql)
         self.sql_interface.cnx.commit()
@@ -105,6 +105,6 @@ class process_consumer:
         self.channel.basic_qos(prefetch_count=1)
         self.channel.basic_consume(queue=f'command_queue_{self.site_id}_{self.group_id}' , on_message_callback=self.callback)
         self.channel.start_consuming()
-
-pc = process_consumer()
-pc.run()
+#
+#pc = process_consumer()
+#pc.run()
