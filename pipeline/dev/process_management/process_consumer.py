@@ -53,7 +53,8 @@ class process_consumer:
         if len(res)==3:
             par = res[2]
         par = par.replace("'",'"')
-        par = json.loads(par.replace("'",'"'))
+        print(f'par={par}')
+        par = json.loads(par)
 
         return PID,cmd,par
     def work(self,PID,cmd,par):
