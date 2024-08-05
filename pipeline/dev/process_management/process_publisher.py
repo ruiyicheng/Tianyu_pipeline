@@ -3,20 +3,23 @@ import time
 import numpy as np
 
 class process_publisher:
-    def __init__(self,host_pika = '192.168.1.107',host_sql = '192.169.1.107'):
+    def __init__(self,host_pika = '192.168.1.107',host_sql = '192.169.1.107',site_id=1,group_id = 1):
 
         self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
                               host=host_sql,
                               database='tianyudev')
-        self._default_site_id = 1
-        self._default_group_id = 1
+        self._default_site_id = site_id
+        self._default_group_id = group_id
     @property
     def default_site_id(self):
-        return
+        if hasattr(self,"_default_site_id"):
+            return self._default_site_id
+
     
     @property
-    def consume_group_id(self):
-        return
+    def default_group_id(self):
+        if hasattr(self,"_default_group_id"):
+            return self._default_group_id
     def generate_PID(self):
         return (time.time_ns()+np.random.randint(0,1000))*100000+np.random.randint(0,100000)
     

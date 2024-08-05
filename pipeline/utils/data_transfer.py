@@ -10,4 +10,5 @@ class file_transferer:
         In real runtime. This step would be executed automatically because of real-time demand and large number of sky region.
         '''
         self.fs.init_file_system()
-        
+    def transfer_obs_site_to_site(self,obs_id,site_1,site_2):
+        pass

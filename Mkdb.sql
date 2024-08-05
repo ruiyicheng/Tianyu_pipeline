@@ -43,7 +43,7 @@ CREATE TABLE process_list(
 );
 
 
-DROP TABLE process;
+DROP TABLE process_dependence;
 CREATE TABLE process_dependence(
     master_process_id DECIMAL(25),
     dependence_process_id DECIMAL(25),
@@ -94,14 +94,6 @@ CREATE TABLE obs_site(
 
  INSERT INTO data_process_site (process_site_name,process_site_ip,mysql_user_name,mysql_user_psw) values ('macbook','127.0.0.1','root','root');
 
-
-
-INSERT INTO data_process_site_status (site_status) VALUES ("is_img_store_site");
-INSERT INTO data_process_site_status (site_status) VALUES ("is_sql_site");
-INSERT INTO data_process_site_status (site_status) VALUES ("is_pika_site");
-INSERT INTO data_process_site_status (site_status) VALUES ("is_obs_site");
-INSERT INTO data_process_site_status (site_status) VALUES ("is_visualization_site");
-INSERT INTO data_process_site_status (site_status) VALUES ("is_data_processing_site");
 
 INSERT INTO observation_type (observation_type_name) VALUES ("science");
 INSERT INTO observation_type (observation_type_name) VALUES ("outreach");
@@ -237,6 +229,8 @@ CREATE TABLE source_type(
 );
 
 
+
+
 CREATE TABLE tianyu_source(
     source_id BIGINT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
     source_type_id INT NOT NULL,
@@ -249,6 +243,8 @@ CREATE TABLE tianyu_source(
     FOREIGN KEY (source_type_id) REFERENCES source_type(source_type_id),
     FOREIGN KEY (sky_id) REFERENCES sky(sky_id)
 );
+
+DROP TABLE star_pixel_img;
 
 CREATE TABLE star_pixel_img(
     star_pixel_img_id BIGINT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
@@ -283,11 +279,11 @@ CREATE TABLE star_pixel_img(
     INDEX(bjd_tdb_end),
     INDEX(flux_raw),
     INDEX(flux_relative),
-    INDEX(flux_relative),
     INDEX(mag_calibrated_absolute),
     FOREIGN KEY (source_id) REFERENCES tianyu_source(source_id),
     FOREIGN KEY (image_id) REFERENCES img(image_id)
 );
+
 
 CREATE TABLE reference_star(
     obs_id INT,
@@ -354,7 +350,6 @@ INSERT INTO observer (observer_name,observer_type_id) VALUES ("Yicheng Rui",1);
 
 INSERT INTO target_type (target_type) VALUES ("calibration");
 INSERT INTO target_type (target_type) VALUES ("star_field");
-INSERT INTO target_type (target_type) VALUES ("single_star");
 INSERT INTO target_type (target_type) VALUES ("moon");
 INSERT INTO target_type (target_type) VALUES ("planet");
 INSERT INTO target_type (target_type) VALUES ("sun");
@@ -372,7 +367,7 @@ INSERT INTO target_n (target_name, target_type_id) VALUES ("saturn",(SELECT targ
 INSERT INTO target_n (target_name, target_type_id) VALUES ("flat",(SELECT target_type_id FROM target_type where target_type.target_type = 'calibration' LIMIT 1));
 INSERT INTO target_n (target_name, target_type_id) VALUES ("dark",(SELECT target_type_id FROM target_type where target_type.target_type = 'calibration' LIMIT 1));
 INSERT INTO target_n (target_name, target_type_id) VALUES ("bias",(SELECT target_type_id FROM target_type where target_type.target_type = 'calibration' LIMIT 1));
-INSERT INTO target_n (target_name, target_type_id) VALUES ("HAT-P-20",(SELECT target_type_id FROM target_type where target_type.target_type = 'single_star' LIMIT 1));
+INSERT INTO target_n (target_name, target_type_id) VALUES ("HAT-P-20",(SELECT target_type_id FROM target_type where target_type.target_type = 'star_field' LIMIT 1));
 
 
 
