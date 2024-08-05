@@ -143,6 +143,8 @@ CREATE TABLE observation(
     FOREIGN KEY (observer_id) REFERENCES observer(observer_id)
 );
 
+INSERT INTO observation (observation_type_id,target_id,batch_size,instrument_id,obs_site_id,observer_id,bin_size) VALUES (%s,%s,%s,%s,%s,%s,%s);
+
 CREATE TABLE image_type(
     image_type_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
     image_type TEXT
@@ -300,7 +302,7 @@ CREATE TABLE source_crossmatch(
     source_id BIGINT
 );
 #--site flag: 1:is_sql_server; 2:is pika server; 4: store the image; 8:telescope control; 16 data process center; 32 mission publisher; 64 visialization center
-#;
+#--group flag: 1: gpu; 2: large memory;
 
 
 
@@ -310,7 +312,8 @@ CREATE TABLE source_crossmatch(
 INSERT INTO data_process_site (process_site_name,process_site_ip,process_site_flag,file_path,user_name) VALUES ('macbook_rui','192.168.1.100',96,'/Users/ruiyicheng/Documents/code/projects/TianYu/debug_Tianyu_file_system','ruiyicheng');
 INSERT INTO data_process_site (process_site_name,process_site_ip,process_site_flag,file_path,user_name) VALUES ('control_desktop','192.168.1.106',40,'/mnt/d/Tianyu_data','root');
 INSERT INTO data_process_site (process_site_name,process_site_ip,process_site_flag,file_path,user_name) VALUES ('data_desktop','192.168.1.107',55,'/media/test/nf/mgo_data','test');
-
+UPDATE data_process_site SET process_site_ip="192.168.1.102" where process_site_name='macbook_rui';
+select * from data_process_site;
 
 INSERT INTO filters (filter_name) values ("L");
 INSERT INTO filters (filter_name) values ("R");
@@ -336,7 +339,9 @@ INSERT INTO image_type (image_type) values ("mask");
 
 INSERT INTO instrument (instrument_name,filter_id) VALUES ("L350+QHY600m",1);
 
-INSERT INTO obs_site (obs_site_name,obs_site_lon,obs_site_lat,obs_site_height) VALUES ("TDLI_MGO",121.60805556,31.164722222,1);
+
+INSERT INTO obs_site (obs_site_name,obs_site_lon,obs_site_lat,obs_site_height,process_site_id) VALUES ("TDLI_MGO",121.60805556,31.164722222,1,2);
+UPDATE obs_site SET process_site_id = 2;
 
 INSERT INTO observation_type (observation_type_name) VALUES ("science");
 INSERT INTO observation_type (observation_type_name) VALUES ("outreach");
@@ -369,8 +374,13 @@ INSERT INTO target_n (target_name, target_type_id) VALUES ("dark",(SELECT target
 INSERT INTO target_n (target_name, target_type_id) VALUES ("bias",(SELECT target_type_id FROM target_type where target_type.target_type = 'calibration' LIMIT 1));
 INSERT INTO target_n (target_name, target_type_id) VALUES ("HAT-P-20",(SELECT target_type_id FROM target_type where target_type.target_type = 'star_field' LIMIT 1));
 
+INSERT INTO target_n (target_name, target_type_id) VALUES ("TrES5",(SELECT target_type_id FROM target_type where target_type.target_type = 'star_field' LIMIT 1));
 
+INSERT INTO data_process_group (process_site_id) VALUES (1);
+INSERT INTO data_process_group (process_site_id) VALUES (2);
+INSERT INTO data_process_group (process_site_id) VALUES (3);
 
+SELECT * FROM data_process_group;
 
 SHOW TABLES;
 DROP TABLE process;
