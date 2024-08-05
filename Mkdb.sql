@@ -41,8 +41,8 @@ CREATE TABLE process_list(
     FOREIGN KEY (process_site_id) REFERENCES data_process_site(process_site_id),
     FOREIGN KEY (process_group_id) REFERENCES data_process_group(process_group_id)
 );
-
-
+select * from process_list;
+DELETE FROM process_list where process_status_id = 2;
 DROP TABLE process_dependence;
 CREATE TABLE process_dependence(
     master_process_id DECIMAL(25),
@@ -337,8 +337,8 @@ INSERT INTO image_type (image_type) values ("dark_flat");
 INSERT INTO image_type (image_type) values ("bias");
 INSERT INTO image_type (image_type) values ("mask");
 
-INSERT INTO instrument (instrument_name,filter_id) VALUES ("L350+QHY600m L",1);
-
+INSERT INTO instrument (instrument_name,filter_id) VALUES ("L350+QHY600m",1);
+select * from instrument;
 
 INSERT INTO obs_site (obs_site_name,obs_site_lon,obs_site_lat,obs_site_height,process_site_id) VALUES ("TDLI_MGO",121.60805556,31.164722222,1,2);
 UPDATE obs_site SET process_site_id = 2;
@@ -376,6 +376,10 @@ INSERT INTO target_n (target_name, target_type_id) VALUES ("HAT-P-20",(SELECT ta
 
 INSERT INTO target_n (target_name, target_type_id) VALUES ("TrES5",(SELECT target_type_id FROM target_type where target_type.target_type = 'star_field' LIMIT 1));
 
+
+select * from target_n;
+select * from obs_site;
+select * from observer;
 INSERT INTO data_process_group (process_site_id) VALUES (1);
 INSERT INTO data_process_group (process_site_id) VALUES (2);
 INSERT INTO data_process_group (process_site_id) VALUES (3);

@@ -30,7 +30,7 @@ class process_publisher:
 
     def register_info(self,param_dict,consume_site_id=-1,consume_group_id=-1):
         '''
-        example: register_info({'cmd':"INSERT INTO tabname (.....) VALUES (%s,%s.....);",'args':'(,)'})
+        example: register_info({"cmd":"INSERT INTO tabname (.....) VALUES (%s,%s.....);","args":'(,)'})
         '''
         if consume_site_id==-1:
             consume_site_id=self.default_site_id
