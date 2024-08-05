@@ -143,8 +143,8 @@ CREATE TABLE observation(
     FOREIGN KEY (observer_id) REFERENCES observer(observer_id)
 );
 
-INSERT INTO observation (observation_type_id,target_id,batch_size,instrument_id,obs_site_id,observer_id,bin_size) VALUES (%s,%s,%s,%s,%s,%s,%s);
-
+#--INSERT INTO observation (observation_type_id,target_id,batch_size,instrument_id,obs_site_id,observer_id,bin_size) VALUES (%s,%s,%s,%s,%s,%s,%s);
+select * from target_n;
 CREATE TABLE image_type(
     image_type_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
     image_type TEXT
@@ -337,7 +337,7 @@ INSERT INTO image_type (image_type) values ("dark_flat");
 INSERT INTO image_type (image_type) values ("bias");
 INSERT INTO image_type (image_type) values ("mask");
 
-INSERT INTO instrument (instrument_name,filter_id) VALUES ("L350+QHY600m",1);
+INSERT INTO instrument (instrument_name,filter_id) VALUES ("L350+QHY600m L",1);
 
 
 INSERT INTO obs_site (obs_site_name,obs_site_lon,obs_site_lat,obs_site_height,process_site_id) VALUES ("TDLI_MGO",121.60805556,31.164722222,1,2);

@@ -3,11 +3,10 @@ import time
 import numpy as np
 
 class process_publisher:
-    def __init__(self,host_pika = '192.168.1.107',host_sql = '192.169.1.107',site_id=1,group_id = 1):
-
-        self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
-                              host=host_sql,
-                              database='tianyudev')
+    def __init__(self,host_pika = '192.168.1.107',host_sql = '192.168.1.107',site_id=1,group_id = 1):
+        print('connecting to db')
+        self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',host=host_sql,database='tianyudev')
+        print('done')
         self._default_site_id = site_id
         self._default_group_id = group_id
     @property
@@ -29,10 +28,14 @@ class process_publisher:
     def align(self,PID):
         pass
 
-    def register_info(self,param_dict,consume_site_id=self.default_site_id,consume_group_id=self.default_group_id):
+    def register_info(self,param_dict,consume_site_id=-1,consume_group_id=-1):
         '''
         example: register_info({'cmd':"INSERT INTO tabname (.....) VALUES (%s,%s.....);",'args':'(,)'})
         '''
+        if consume_site_id==-1:
+            consume_site_id=self.default_site_id
+        if consume_group_id==-1:
+            consume_group_id=self.default_group_id         
         PID_this = self.publish_CMD(consume_site_id,consume_group_id,f'register|{param_dict}',[])
         return PID_this
     def stacking(self,consume_site_id,consume_group_id,PIDs,num_image_limit = 5):
@@ -56,7 +59,7 @@ class process_publisher:
         PID_this = self.generate_PID()
 
         mycursor = self.cnx.cursor()
-        sql = "INSERT INTO process (process_id,process_cmd,process_status_id,process_site_id,process_group_id) VALUES (%s, %s,1,%s,%s)"
+        sql = "INSERT INTO process_list (process_id,process_cmd,process_status_id,process_site_id,process_group_id) VALUES (%s, %s,1,%s,%s)"
         argsql = (PID_this,CMD,process_site,process_group)
         mycursor.execute(sql, argsql)
         self.cnx.commit()
