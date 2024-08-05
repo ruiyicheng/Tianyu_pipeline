@@ -23,9 +23,9 @@ class data_loader:
             myresult = mycursor.fetchall()
             img_id = myresult[0][0] #auto_increment
             if sql.split(' ')[2]=='img':
-                sql = 'ALTER TABLE img SET birth_process_id=%s where image_id=%s;'
+                sql = 'UPDATE img SET birth_process_id=%s where image_id=%s;'
             else:
-                sql = 'ALTER TABLE observation SET process_id=%s where obs_id=%s'
+                sql = 'UPDATE observation SET process_id=%s where obs_id=%s'
             args = (PID,img_id)
             mycursor.execute(sql,args)
             self.sql_interface.cnx.commit()
