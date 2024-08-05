@@ -81,6 +81,8 @@ class process_consumer:
         #return 0
         if success:
             print("Success!")
+        else:
+            print('Failed')
         return success
     def callback(self,ch, method, properties, body):
         print(f" [x] Received {body.decode()}, changing db...")
