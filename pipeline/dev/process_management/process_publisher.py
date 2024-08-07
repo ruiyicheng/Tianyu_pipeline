@@ -40,9 +40,6 @@ class process_publisher:
         return PID_this
 
     def load_UTC(self,PIDs,consume_site_id=-1,consume_group_id=-1):
-        '''
-        example: register_info({"cmd":"INSERT INTO tabname (.....) VALUES (%s,%s.....);","args":'[...]'})
-        '''
         if consume_site_id==-1:
             consume_site_id=self.default_site_id
         if consume_group_id==-1:

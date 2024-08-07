@@ -6,10 +6,11 @@ import tqdm
 import numpy as np
 import pandas as pd
 from Tianyu_pipeline.pipeline.utils import sql_interface 
+import Tianyu_pipeline.pipeline.dev.file_system  as file_system
 class data_loader:
     def __init__(self):
         self.sql_interface = sql_interface.sql_interface()
-
+        self.file_system = file_system.file_system()
 
     def register(self,PID,cmd,par):
 
@@ -86,6 +87,7 @@ class data_loader:
         # mycursor.execute("SELECT * from gdr3 where source_id="+gid_str+';')
         # myresult = mycursor.fetchall()
         print('Created observation id=',self.obs_id)
+
     def load_img_from_fit(self,img_dir,hierarchy = 1,info = {'image_type':'flat_raw'}):
         file_path = sorted(glob.glob(img_dir))
         mycursor = self.sql_interface.cnx.cursor()
@@ -137,7 +139,26 @@ class data_loader:
         mycursor.execute(sql)
         myresult = mycursor.fetchall()
         return myresult
+    
+    def load_UTC(self,PID):
+        picture_birth_PID = self.sql_interface.get_process_dependence(PID)
+        for birth_PID in tqdm.tqdm(picture_birth_PID):
+            file_path,file_name = self.file_system.get_dir_for_object('img',{'birth_pid':birth_PID})
+            header = fits.getheader(f"{file_path}/{file_name}")
+            jd_utc_start = header['JD']
+            jd_utc_mid = header['JD']+header['EXPOSURE']/3600/24/2
+            jd_utc_end = header['JD']+header['EXPOSURE']/3600/24
+            sql = "UPDATE img SET jd_utc_start=%s,jd_utc_mid=%s,jd_utc_end=%s WHERE birth_process_id=%s;"
+            args = (jd_utc_start,jd_utc_mid,jd_utc_end,birth_PID)
+            mycursor = self.sql_interface.cnx.cursor()
+            mycursor.execute(sql,args)
+            self.sql_interface.cnx.commit()
 
+            
+
+
+
+        return 1
 if __name__=="__main__":
     dl = data_loader()
 

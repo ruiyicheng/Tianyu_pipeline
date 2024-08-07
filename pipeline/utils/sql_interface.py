@@ -57,3 +57,16 @@ class sql_interface:
             df.columns = headers
             return df
         return myresult,headers
+    
+    def get_process_dependence(self,PID,pid_type = "master"):
+        args = (PID,)
+        if pid_type=="master":
+            sql = "SELECT * from process_dependence WHERE master_process_id = %s;"
+        else:
+            sql = "SELECT * from process_dependence WHERE dependence_process_id = %s;"
+        result = self.query(sql,args).to_dict('list')
+        if pid_type=="master":
+            return result['dependence_process_id']
+        else:
+            return result['master_process_id']
+

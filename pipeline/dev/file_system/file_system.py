@@ -111,8 +111,7 @@ WHERE img.image_id = %s;
             item_name = result_dict['img_name']
 
             return obs_path+f'/{batch_name}/{type_name}/{img_mask}',item_name
-    def load_UTC(self,PID):
-        return 1 
+ 
     def create_dir_for_object(self,obj_type,param_dict):
         try:
             dir_path,_ = self.get_dir_for_object(obj_type,param_dict)
