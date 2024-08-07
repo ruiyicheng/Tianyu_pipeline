@@ -28,9 +28,31 @@ class process_publisher:
     def align(self,PID):
         pass
 
+    def create_dir(self,param_dict,consume_site_id=-1,consume_group_id=-1):
+        '''
+        example: register_info({"cmd":"INSERT INTO tabname (.....) VALUES (%s,%s.....);","args":'[...]'})
+        '''
+        if consume_site_id==-1:
+            consume_site_id=self.default_site_id
+        if consume_group_id==-1:
+            consume_group_id=self.default_group_id 
+        PID_this = self.publish_CMD(consume_site_id,consume_group_id,f'create_dir|{param_dict}',[])
+        return PID_this
+
+    def load_UTC(self,PIDs,consume_site_id=-1,consume_group_id=-1):
+        '''
+        example: register_info({"cmd":"INSERT INTO tabname (.....) VALUES (%s,%s.....);","args":'[...]'})
+        '''
+        if consume_site_id==-1:
+            consume_site_id=self.default_site_id
+        if consume_group_id==-1:
+            consume_group_id=self.default_group_id         
+        PID_this = self.publish_CMD(consume_site_id,consume_group_id,f'load_UTC',PIDs)
+        return PID_this
+
     def register_info(self,param_dict,consume_site_id=-1,consume_group_id=-1):
         '''
-        example: register_info({"cmd":"INSERT INTO tabname (.....) VALUES (%s,%s.....);","args":'(,)'})
+        example: register_info({"cmd":"INSERT INTO tabname (.....) VALUES (%s,%s.....);","args":'[...]'})
         '''
         if consume_site_id==-1:
             consume_site_id=self.default_site_id
@@ -71,6 +93,7 @@ class process_publisher:
         self.cnx.commit()
         return PID_this
     
+
     def test(self,item = 'stacking'):
         if item =="stacking":
             print(self.stacking(1,[self.publish_CMD(1,1,1,"capture",[]) for i in range(35)]))

@@ -84,7 +84,7 @@ WHERE obs.obs_id=%s;'''
             if 'birth_pid' in param_dict:
                 sql = '''SELECT img.batch AS batch, imgt.image_type as image_type, img.is_mask as is_mask, imgt.image_type, img.obs_id as obs_id,img.img_name as img_name FROM img
 LEFT JOIN image_type AS imgt ON imgt.image_type_id = img.image_type_id
-WHERE img.birth_PID = %s; 
+WHERE img.birth_process_id = %s; 
 ''' 
                 args = (param_dict['birth_pid'],)
                 result = self.sql_interface.query(sql,args)
@@ -111,9 +111,15 @@ WHERE img.image_id = %s;
             item_name = result_dict['img_name']
 
             return obs_path+f'/{batch_name}/{type_name}/{img_mask}',item_name
-        
+    def load_UTC(self,PID):
+        return 1 
     def create_dir_for_object(self,obj_type,param_dict):
+        try:
             dir_path,_ = self.get_dir_for_object(obj_type,param_dict)
             Path(dir_path).mkdir( parents=True, exist_ok=True)
+            return 1
+        except:
+            print('Create dir failed!')
+            return 0
 
 
