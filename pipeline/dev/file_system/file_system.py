@@ -12,8 +12,8 @@ class file_system:
         self.sql_interface = sql_interface.sql_interface()
         self.psg = psg.process_site_getter()
         self.site_info = self.psg.get_channel()
-    def init_file_system(self,par):
-        path_root = par['root_path']
+    def init_file_system(self):
+        path_root = self.path_root
         Path(path_root+"/image").mkdir( parents=True, exist_ok=True)
         Path(path_root+"/logs").mkdir( parents=True, exist_ok=True)
         Path(path_root+"/queue_result/temp").mkdir( parents=True, exist_ok=True)
