@@ -34,12 +34,14 @@ class file_transferer:
         for i,fp in enumerate(file_paths):
             batch_number = i//batch_size+1   
             PID = self.pp_this_site.register_info({"cmd":"INSERT INTO img (store_site_id,batch,image_type_id,obs_id,img_name) VALUES (%s,%s,%s,%s,%s);","args":[self.site_id,batch_number,image_type_id,observation_id,fp.split('/')[-1]]})
+            print('PID=',PID)
             while True:
                 print(f"waiting for img {i} registration")
                 time.sleep(0.5)
                 sql = '''SELECT * FROM img WHERE img.birth_process_id=%s;'''
                 args = (PID,)
                 result = self.sql_interface.query(sql,args)
+                print(result)
                 if len(result==1):
                     break
                 time.sleep(0.3)
