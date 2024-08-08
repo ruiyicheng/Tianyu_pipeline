@@ -39,7 +39,7 @@ class file_transferer:
                 time.sleep(0.5)
                 sql = '''SELECT * FROM img WHERE img.birth_process_id=%s;'''
                 args = (PID,)
-                result = self.sql_interface.query(sql,args)
+                result,_ = self.sql_interface.query(sql,args,return_df = False)
                 if len(result==1):
                     break
                 time.sleep(0.3)
