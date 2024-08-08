@@ -54,7 +54,8 @@ class sql_interface:
         headers = [i[0] for i in mycursor.description]
         if return_df:
             df = pd.DataFrame(myresult)
-            df.columns = headers
+            if len(df)>0:
+                df.columns = headers
             return df
         return myresult,headers
     
