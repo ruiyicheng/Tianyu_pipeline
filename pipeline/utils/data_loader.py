@@ -6,11 +6,11 @@ import tqdm
 import numpy as np
 import pandas as pd
 from Tianyu_pipeline.pipeline.utils import sql_interface 
-import Tianyu_pipeline.pipeline.dev.file_system  as file_system
+import Tianyu_pipeline.pipeline.dev.file_system.file_system  as fs
 class data_loader:
     def __init__(self):
         self.sql_interface = sql_interface.sql_interface()
-        self.file_system = file_system.file_system()
+        self.file_system = fs.file_system()
 
     def register(self,PID,cmd,par):
 
