@@ -48,10 +48,12 @@ class sql_interface:
             res_dict[row[index_key]] = row[index_value]
         return res_dict
     def query(self,sql,args,return_df = True):
+        self.cnx.commit()
         mycursor = self.cnx.cursor()
         mycursor.execute(sql,args)
         myresult = mycursor.fetchall()
         headers = [i[0] for i in mycursor.description]
+        print(myresult)
         if return_df:
             df = pd.DataFrame(myresult)
             if len(df)>0:
