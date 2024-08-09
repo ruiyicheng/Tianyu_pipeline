@@ -82,7 +82,7 @@ WHERE obs.obs_id=%s;'''
         
         if obj_type=='img':#batch+imgtype
             if 'birth_pid' in param_dict:
-                sql = '''SELECT img.batch AS batch, imgt.image_type as image_type, img.is_mask as is_mask, imgt.image_type, img.obs_id as obs_id,img.img_name as img_name FROM img
+                sql = '''SELECT img.batch AS batch, imgt.image_type as image_type, img.is_mask as is_mask, img.obs_id as obs_id,img.img_name as img_name FROM img
 LEFT JOIN image_type AS imgt ON imgt.image_type_id = img.image_type_id
 WHERE img.birth_process_id = %s; 
 ''' 
@@ -98,18 +98,18 @@ WHERE img.image_id = %s;
                 args = (param_dict['image_id'],)
                 result = self.sql_interface.query(sql,args)
                 assert len(result)==1
-                result_dict = result#.to_dict('records')[0]
-            print(result)
-            obs_path = self.get_dir_for_object('observation',{'observation_id':(result['obs_id'].values)[0]})
-            batch_name = (result_dict['batch'].values)[0]
-            type_name = (result_dict['image_type'].values)[0]
+                result_dict = result.to_dict('records')[0]
+            #print(result)
+            obs_path = self.get_dir_for_object('observation',{'observation_id':result['obs_id']})
+            batch_name = result_dict['batch']
+            type_name = result_dict['image_type']
             
             
-            if not (result_dict['is_mask'].values)[0]:
+            if not result_dict['is_mask']:
                 img_mask = 'frame'
             else:
                 img_mask = 'mask'
-            item_name = (result_dict['img_name'].values)[0]
+            item_name = result_dict['img_name']
 
             return f'{obs_path}/{batch_name}/{type_name}/{img_mask}',item_name
  

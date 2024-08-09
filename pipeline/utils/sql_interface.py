@@ -53,7 +53,7 @@ class sql_interface:
         mycursor.execute(sql,args)
         myresult = mycursor.fetchall()
         headers = [i[0] for i in mycursor.description]
-        print(myresult)
+        #print(myresult)
         if return_df:
             df = pd.DataFrame(myresult)
             if len(df)>0:
