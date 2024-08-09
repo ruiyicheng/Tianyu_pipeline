@@ -110,15 +110,16 @@ WHERE img.image_id = %s;
                 img_mask = 'mask'
             item_name = (result_dict['img_name'].values)[0]
 
-            return obs_path+f'/{batch_name}/{type_name}/{img_mask}',item_name
+            return f'{obs_path}/{batch_name}/{type_name}/{img_mask}',item_name
  
     def create_dir_for_object(self,obj_type,param_dict):
-        try:
-            dir_path,_ = self.get_dir_for_object(obj_type,param_dict)
-            Path(dir_path).mkdir( parents=True, exist_ok=True)
-            return 1
-        except:
-            print('Create dir failed!')
-            return 0
+        #try:
+        dir_path,_ = self.get_dir_for_object(obj_type,param_dict)
+        print('object created at',dir_path)
+        Path(dir_path).mkdir(parents=True, exist_ok=True)
+        return 1
+        #except:
+        #    print('Create dir failed!')
+        #    return 0
 
 

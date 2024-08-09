@@ -47,7 +47,9 @@ class file_transferer:
                 time.sleep(0.3)
         
             PID_list.append(PID)
-            obs_folder_path,file_name = self.fs.create_dir_for_object('img',{'birth_pid':PID})
+            obs_folder_path,file_name = self.fs.get_dir_for_object('img',{'birth_pid':PID})
+            success = self.fs.create_dir_for_object('img',{'birth_pid':PID})
+            
             os.system(f"mv {fp} {obs_folder_path}/{file_name}")
         self.pp_this_site.load_UTC(PID_list)
 
