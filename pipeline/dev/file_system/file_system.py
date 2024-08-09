@@ -47,7 +47,7 @@ ON tg.target_id = obs.target_id
 LEFT JOIN instrument AS ins
 ON ins.instrument_id = obs.instrument_id
 LEFT JOIN obs_site AS site
-ON site.obs_site_id= obs.site_id
+ON site.obs_site_id= obs.obs_site_id
 LEFT JOIN filters
 ON filters.filter_id = ins.filter_id
 WHERE obs.process_id=%s;'''
@@ -63,7 +63,7 @@ ON tg.target_id = obs.target_id
 LEFT JOIN instrument AS ins
 ON ins.instrument_id = obs.instrument_id
 LEFT JOIN obs_site AS site
-ON site.obs_site_id= obs.site_id
+ON site.obs_site_id= obs.obs_site_id
 LEFT JOIN filters
 ON filters.filter_id = ins.filter_id
 WHERE obs.obs_id=%s;'''
