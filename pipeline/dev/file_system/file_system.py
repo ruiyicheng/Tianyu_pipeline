@@ -99,6 +99,7 @@ WHERE img.image_id = %s;
                 result = self.sql_interface.query(sql,args)
                 assert len(result)==1
                 result_dict = result#.to_dict('records')[0]
+            print(result)
             obs_path = self.get_dir_for_object('observation',{'observation_id':(result['obs_id'].values)[0]})
             batch_name = (result_dict['batch'].values)[0]
             type_name = (result_dict['image_type'].values)[0]
