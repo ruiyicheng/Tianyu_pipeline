@@ -10,10 +10,10 @@ CREATE TABLE data_process_site(
     process_site_flag INT,
     user_name TEXT
 );
-alter table data_process_site ADD column user_name TEXT;
-alter table data_process_site  drop process_site_root_path;
-show columns from data_process_site;
-DROP TABLE data_process_group;
+#alter table data_process_site ADD column user_name TEXT;
+#alter table data_process_site  drop process_site_root_path;
+#show columns from data_process_site;
+#DROP TABLE data_process_group;
 CREATE TABLE data_process_group(
 	process_group_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
     process_site_id INT NOT NULL,
@@ -41,9 +41,9 @@ CREATE TABLE process_list(
     FOREIGN KEY (process_site_id) REFERENCES data_process_site(process_site_id),
     FOREIGN KEY (process_group_id) REFERENCES data_process_group(process_group_id)
 );
-select * from process_list;
-DELETE FROM process_list where process_status_id = 2;
-DROP TABLE process_dependence;
+#select * from process_list;
+#DELETE FROM process_list where process_status_id = 2;
+#DROP TABLE process_dependence;
 CREATE TABLE process_dependence(
     master_process_id DECIMAL(25),
     dependence_process_id DECIMAL(25),
@@ -52,7 +52,7 @@ CREATE TABLE process_dependence(
 );
 
 
-DROP TABLE process_dependence;
+#DROP TABLE process_dependence;
 INSERT INTO process_type (process_status) VALUES ("WAITING");
 INSERT INTO process_type (process_status) VALUES ("IN QUEUE");
 INSERT INTO process_type (process_status) VALUES ("RUNNING");
@@ -79,7 +79,7 @@ CREATE TABLE instrument(
     local_folder_path TEXT,
     FOREIGN KEY (filter_id) REFERENCES filters(filter_id)
 );
-DROP TABLE obs_site;
+#DROP TABLE obs_site;
 CREATE TABLE obs_site(
 	obs_site_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
     process_site_id INT,
@@ -92,13 +92,13 @@ CREATE TABLE obs_site(
 
 
 
- INSERT INTO data_process_site (process_site_name,process_site_ip,mysql_user_name,mysql_user_psw) values ('macbook','127.0.0.1','root','root');
+ #INSERT INTO data_process_site (process_site_name,process_site_ip,mysql_user_name,mysql_user_psw) values ('macbook','127.0.0.1','root','root');
 
 
-INSERT INTO observation_type (observation_type_name) VALUES ("science");
-INSERT INTO observation_type (observation_type_name) VALUES ("outreach");
+#INSERT INTO observation_type (observation_type_name) VALUES ("science");
+#INSERT INTO observation_type (observation_type_name) VALUES ("outreach");
 
-INSERT INTO data_process_site (file_path,process_site,process_site_ip,mysql_user_name,mysql_user_psw,is_main_site) values ();
+#INSERT INTO data_process_site (file_path,process_site,process_site_ip,mysql_user_name,mysql_user_psw,is_main_site) values ();
 
 CREATE TABLE observer_type(
     observer_type_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
@@ -144,7 +144,7 @@ CREATE TABLE observation(
 );
 
 #--INSERT INTO observation (observation_type_id,target_id,batch_size,instrument_id,obs_site_id,observer_id,bin_size) VALUES (%s,%s,%s,%s,%s,%s,%s);
-select * from target_n;
+#select * from target_n;
 CREATE TABLE image_type(
     image_type_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
     image_type TEXT
@@ -187,9 +187,9 @@ CREATE TABLE img(
     INDEX(jd_utc_mid)
 );
 
-SHOW COLUMNS from img;
-ALTER TABLE img DROP column img_path;
-ALTER TABLE img ADD column img_name TEXT;
+#SHOW COLUMNS from img;
+#ALTER TABLE img DROP column img_path;
+#ALTER TABLE img ADD column img_name TEXT;
 CREATE TABLE img_stacking(
     image_id BIGINT  NOT NULL,
     stacked_id BIGINT NOT NULL,
@@ -197,9 +197,9 @@ CREATE TABLE img_stacking(
     FOREIGN KEY (stacked_id) REFERENCES img(image_id)
 );
 
---deg
---clockwise x is ra+ when 
--- NOT NULL DEFAULT ST_SRID(POINT(0,0),4326),SPATIAL INDEX(fov_pos),
+#--deg
+#--clockwise x is ra+ when 
+#-- NOT NULL DEFAULT ST_SRID(POINT(0,0),4326),SPATIAL INDEX(fov_pos),
 
 
 
@@ -246,7 +246,7 @@ CREATE TABLE tianyu_source(
     FOREIGN KEY (sky_id) REFERENCES sky(sky_id)
 );
 
-DROP TABLE star_pixel_img;
+#DROP TABLE star_pixel_img;
 
 CREATE TABLE star_pixel_img(
     star_pixel_img_id BIGINT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
@@ -309,11 +309,11 @@ CREATE TABLE source_crossmatch(
 
 
 
-INSERT INTO data_process_site (process_site_name,process_site_ip,process_site_flag,file_path,user_name) VALUES ('macbook_rui','192.168.1.100',96,'/Users/ruiyicheng/Documents/code/projects/TianYu/debug_Tianyu_file_system','ruiyicheng');
+INSERT INTO data_process_site (process_site_name,process_site_ip,process_site_flag,file_path,user_name) VALUES ('macbook_rui','192.168.1.102',96,'/Users/ruiyicheng/Documents/code/projects/TianYu/debug_Tianyu_file_system','ruiyicheng');
 INSERT INTO data_process_site (process_site_name,process_site_ip,process_site_flag,file_path,user_name) VALUES ('control_desktop','192.168.1.106',40,'/mnt/d/Tianyu_data','root');
 INSERT INTO data_process_site (process_site_name,process_site_ip,process_site_flag,file_path,user_name) VALUES ('data_desktop','192.168.1.107',55,'/media/test/nf/mgo_data','test');
-UPDATE data_process_site SET process_site_ip="192.168.1.102" where process_site_name='macbook_rui';
-select * from data_process_site;
+#UPDATE data_process_site SET process_site_ip="192.168.1.102" where process_site_name='macbook_rui';
+#select * from data_process_site;
 
 INSERT INTO filters (filter_name) values ("L");
 INSERT INTO filters (filter_name) values ("R");
@@ -341,8 +341,8 @@ INSERT INTO instrument (instrument_name,filter_id) VALUES ("L350+QHY600m",1);
 select * from instrument;
 
 INSERT INTO obs_site (obs_site_name,obs_site_lon,obs_site_lat,obs_site_height,process_site_id) VALUES ("TDLI_MGO",121.60805556,31.164722222,1,2);
-UPDATE obs_site SET process_site_id = 2;
-
+#UPDATE obs_site SET process_site_id = 2;
+select * from observation_type;
 INSERT INTO observation_type (observation_type_name) VALUES ("science");
 INSERT INTO observation_type (observation_type_name) VALUES ("outreach");
 
@@ -372,19 +372,27 @@ INSERT INTO target_n (target_name, target_type_id) VALUES ("saturn",(SELECT targ
 INSERT INTO target_n (target_name, target_type_id) VALUES ("flat",(SELECT target_type_id FROM target_type where target_type.target_type = 'calibration' LIMIT 1));
 INSERT INTO target_n (target_name, target_type_id) VALUES ("dark",(SELECT target_type_id FROM target_type where target_type.target_type = 'calibration' LIMIT 1));
 INSERT INTO target_n (target_name, target_type_id) VALUES ("bias",(SELECT target_type_id FROM target_type where target_type.target_type = 'calibration' LIMIT 1));
-INSERT INTO target_n (target_name, target_type_id) VALUES ("HAT-P-20",(SELECT target_type_id FROM target_type where target_type.target_type = 'star_field' LIMIT 1));
+#INSERT INTO target_n (target_name, target_type_id) VALUES ("HAT-P-20",(SELECT target_type_id FROM target_type where target_type.target_type = 'star_field' LIMIT 1));
 
 INSERT INTO target_n (target_name, target_type_id) VALUES ("TrES5",(SELECT target_type_id FROM target_type where target_type.target_type = 'star_field' LIMIT 1));
 
 
-select * from target_n;
-select * from obs_site;
-select * from observer;
+#select * from target_n;
+#select * from obs_site;
+#select * from observer;
 INSERT INTO data_process_group (process_site_id) VALUES (1);
 INSERT INTO data_process_group (process_site_id) VALUES (2);
 INSERT INTO data_process_group (process_site_id) VALUES (3);
-
+SELECT * FROM data_process_site;
 SELECT * FROM data_process_group;
+UPDATE data_process_site SET process_site_ip="127.0.1.1" where process_site_id=2;
 
-SHOW TABLES;
-DROP TABLE process;
+SELECT * FROM observation;
+select * from img;
+DELETE FROM img where image_id <= 106;
+SHOW COLUMNS FROM img;
+SELECT * FROM image_type;
+#DELETE FROM observation where instrument_id=1;
+SELECT * from process_list;
+#SHOW TABLES;
+#DROP TABLE process;

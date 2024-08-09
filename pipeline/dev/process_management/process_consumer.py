@@ -69,7 +69,7 @@ class process_consumer:
         if cmd== 'create_dir':
             success = self.fs.create_dir_for_object(par['obj_type'],par['param_dict'])
         if cmd== 'load_UTC':
-            success = self.fs.load_UTC(PID)
+            success = self.dl.load_UTC(PID)
         if cmd == 'capture':
             pass
         if cmd == 'data_deliver':
