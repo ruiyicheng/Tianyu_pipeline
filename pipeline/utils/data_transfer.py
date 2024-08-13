@@ -78,7 +78,7 @@ class file_transferer:
                     break
                 time.sleep(0.3)
             path_remote,fn_remote = self.fs.get_dir_for_object('img',{'image_id':img_id},site_id = site_target)
-            path,fn = self.fs.get_dir_for_object('img',{'image_id':img_id},site_id = site_target)
+            path,fn = self.fs.get_dir_for_object('img',{'image_id':img_id},site_id = -1)
             os.system(f"scp {path}/{fn} {remote_site_info['user_name']}@{remote_site_info['process_site_ip']}:{path_remote}/{fn_remote}")
             mycursor = self.sql_interface.cnx.cursor()
             sql = 'UPDATE img SET store_site_id=%s where image_id=%s;'
