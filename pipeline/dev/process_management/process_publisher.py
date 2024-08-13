@@ -27,7 +27,13 @@ class process_publisher:
         pass
     def align(self,PID):
         pass
-
+    def transfer_img(self,param_dict,consume_site_id=-1,consume_group_id=-1):
+        if consume_site_id==-1:
+            consume_site_id=self.default_site_id
+        if consume_group_id==-1:
+            consume_group_id=self.default_group_id 
+        PID_this = self.publish_CMD(consume_site_id,consume_group_id,f'transfer_img|{param_dict}',[])
+        return PID_this
     def create_dir(self,param_dict,consume_site_id=-1,consume_group_id=-1):
         '''
         example: register_info({"cmd":"INSERT INTO tabname (.....) VALUES (%s,%s.....);","args":'[...]'})

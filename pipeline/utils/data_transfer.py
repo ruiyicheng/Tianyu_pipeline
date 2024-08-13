@@ -65,10 +65,26 @@ class file_transferer:
         remote_site_info = self.fs.psg.get_channel(channel_id = site_target)
         for i,r in result.iterrows():
             img_id = r['image_id']
-            pp_target_site.create_dir(self,{"obj_type":"img","param_dict":{"image_id":img_id}},consume_site_id=site_target,consume_group_id=site_target)
- 
+            PID = pp_target_site.create_dir(self,{"obj_type":"img","param_dict":{"image_id":img_id}},consume_site_id=site_target,consume_group_id=site_target)
+            while True:
+                print(f"waiting for img {i} registration on remote")
+                time.sleep(0.5)
+                sql = '''SELECT * FROM process_list WHERE process_id=%s;'''
+                args = (PID,)
+                result = self.sql_interface.query(sql,args)
+                assert len(result)==1
+                result = result.to_dict('records')[0]
+                if result['process_status_id']==5:
+                    break
+                time.sleep(0.3)
             path_remote,fn_remote = self.fs.get_dir_for_object('img',{'image_id':img_id},site_id = site_target)
             path,fn = self.fs.get_dir_for_object('img',{'image_id':img_id},site_id = site_target)
             os.system(f"scp {path}/{fn} {remote_site_info['user_name']}@{remote_site_info['process_site_ip']}:{path_remote}/{fn_remote}")
+            mycursor = self.sql_interface.cnx.cursor()
+            sql = 'UPDATE img SET store_site_id=%s where image_id=%s;'
+            args = (site_target,img_id)
+            mycursor.execute(sql,args)
+            self.sql_interface.cnx.commit()
             os.system(f"rm {path}/{fn}")
+        return 1
 

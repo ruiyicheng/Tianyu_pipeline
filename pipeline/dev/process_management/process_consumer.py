@@ -9,7 +9,7 @@ import socket
 from Tianyu_pipeline.pipeline.utils import data_loader as dl
 from Tianyu_pipeline.pipeline.utils import sql_interface
 from Tianyu_pipeline.pipeline.dev.file_system import file_system as fs
-
+from Tianyu_pipeline.pipeline.utils import data_transfer as dt
 
 
 class process_consumer:
@@ -22,6 +22,7 @@ class process_consumer:
         self.channel = self.connection.channel()
         self.dl = dl.data_loader()
         self.fs = fs.file_system()
+        self.ft = dt.file_transferer()
         self.channel.queue_declare(queue=f'command_queue_{self.site_id}_{self.group_id}', durable=True)
     # def queue_db(self,sql,argsql):
     #     mycursor = self.sql_interface.cnx.cursor()
@@ -70,6 +71,8 @@ class process_consumer:
             success = self.fs.create_dir_for_object(par['obj_type'],par['param_dict'])
         if cmd== 'load_UTC':
             success = self.dl.load_UTC(PID)
+        if cmd== 'transfer_img':
+            success = self.ft.transfer_obs_site_to_site(par['obs_id'],par['site_target'])
         if cmd == 'capture':
             pass
         if cmd == 'data_deliver':
