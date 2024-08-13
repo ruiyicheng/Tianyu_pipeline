@@ -36,7 +36,7 @@ class file_system:
         if site_id == -1:
             path_root = self.path_root
         else:
-            path_root = self.psg.get_channel(id_channel = site_id)
+            path_root = self.psg.get_channel(channel_id = site_id)
         if obj_type=='observation':
             if 'full_observation_info' in param_dict:
                 result_dict = param_dict

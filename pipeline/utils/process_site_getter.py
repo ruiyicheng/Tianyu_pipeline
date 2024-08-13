@@ -4,8 +4,8 @@ import socket
 class process_site_getter:
     def __init__(self):
         self.sql_interface = sql_interface.sql_interface()
-    def get_channel(self,id_channel = -1):
-        if id_channel == -1:
+    def get_channel(self,channel_id = -1):
+        if channel_id == -1:
             #hostname = socket.gethostname()
             #local_host_list = set(socket.gethostbyname_ex(hostname)[2])
             #print(local_host_list)
@@ -20,7 +20,7 @@ class process_site_getter:
             ret = res[res['process_site_ip']==ip_this]
         else:
             sql = "SELECT * FROM data_process_site where process_site_id = %s;"
-            args = (id_channel,)
+            args = (channel_id,)
             ret = self.sql_interface.query(sql,args)
             assert len(ret)==1
         # pika_host = res[res['is_pika_site']].loc[0]['process_site_ip']
