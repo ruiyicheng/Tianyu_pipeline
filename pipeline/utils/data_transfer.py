@@ -65,7 +65,7 @@ class file_transferer:
         remote_site_info = self.fs.psg.get_channel(channel_id = site_target)
         for i,r in result.iterrows():
             img_id = r['image_id']
-            PID = pp_target_site.create_dir(self,{"obj_type":"img","param_dict":{"image_id":img_id}},consume_site_id=site_target,consume_group_id=site_target)
+            PID = pp_target_site.create_dir({"obj_type":"img","param_dict":{"image_id":img_id}},consume_site_id=site_target,consume_group_id=site_target)
             while True:
                 print(f"waiting for img {i} registration on remote")
                 time.sleep(0.5)

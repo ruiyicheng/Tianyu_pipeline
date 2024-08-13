@@ -312,8 +312,10 @@ CREATE TABLE source_crossmatch(
 INSERT INTO data_process_site (process_site_name,process_site_ip,process_site_flag,file_path,user_name) VALUES ('macbook_rui','192.168.1.102',96,'/Users/ruiyicheng/Documents/code/projects/TianYu/debug_Tianyu_file_system','ruiyicheng');
 INSERT INTO data_process_site (process_site_name,process_site_ip,process_site_flag,file_path,user_name) VALUES ('control_desktop','192.168.1.106',40,'/mnt/d/Tianyu_data','root');
 INSERT INTO data_process_site (process_site_name,process_site_ip,process_site_flag,file_path,user_name) VALUES ('data_desktop','192.168.1.107',55,'/media/test/nf/mgo_data','test');
-#UPDATE data_process_site SET process_site_ip="192.168.1.102" where process_site_name='macbook_rui';
-#select * from data_process_site;
+UPDATE data_process_site SET process_site_ip="192.168.1.100" where process_site_name='macbook_rui';
+UPDATE data_process_site SET process_site_ip="172.20.119.167" where process_site_name='control_desktop';
+
+select * from data_process_site;
 
 INSERT INTO filters (filter_name) values ("L");
 INSERT INTO filters (filter_name) values ("R");
@@ -394,5 +396,6 @@ SHOW COLUMNS FROM img;
 SELECT * FROM image_type;
 #DELETE FROM observation where instrument_id=1;
 SELECT * from process_list;
+DELETE FROM process_list where process_id=172355258233725582503290;
 #SHOW TABLES;
 #DROP TABLE process;
