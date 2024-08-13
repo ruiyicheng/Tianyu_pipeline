@@ -28,13 +28,15 @@ class file_system:
             return self._path_root
             
     
-    def get_dir_for_object(self,obj_type,param_dict):
+    def get_dir_for_object(self,obj_type,param_dict,site_id = -1):
         '''
         return the path of the object
         '''
         item_name = ''
-        #dir_path = self.path_root
-
+        if site_id == -1:
+            path_root = self.path_root
+        else:
+            path_root = self.psg.get_channel(id_channel = site_id)
         if obj_type=='observation':
             if 'full_observation_info' in param_dict:
                 result_dict = param_dict
@@ -76,7 +78,7 @@ WHERE obs.obs_id=%s;'''
             target_name = result_dict['target_name']
             filter_name = result_dict['filter_name']
             process_id = result_dict['pid']
-            dir_path = self.path_root+f'/image/{site_name}/{instrument_name}/{target_name}/{filter_name}/{process_id}'
+            dir_path = path_root+f'/image/{site_name}/{instrument_name}/{target_name}/{filter_name}/{process_id}'
 
             return dir_path,item_name
         
@@ -100,7 +102,7 @@ WHERE img.image_id = %s;
                 assert len(result)==1
                 result_dict = result.to_dict('records')[0]
             #print(result)
-            obs_path,_ = self.get_dir_for_object('observation',{'observation_id':result_dict['obs_id']})
+            obs_path,_ = self.get_dir_for_object('observation',{'observation_id':result_dict['obs_id']},site_id = site_id)
             batch_name = result_dict['batch']
             type_name = result_dict['image_type']
             

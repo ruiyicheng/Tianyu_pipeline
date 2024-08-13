@@ -49,11 +49,26 @@ class file_transferer:
             PID_list.append(PID)
             obs_folder_path,file_name = self.fs.get_dir_for_object('img',{'birth_pid':PID})
             success = self.fs.create_dir_for_object('img',{'birth_pid':PID})
-            
+
             os.system(f"mv {fp} {obs_folder_path}/{file_name}")
         self.pp_this_site.load_UTC(PID_list)
 
 
             
     def transfer_obs_site_to_site(self,obs_id,site_target):
-        pass
+        #1. Create dir; 2. scp 3. mv
+        pp_target_site = process_pub.process_publisher(site_id = site_target, group_id = site_target)
+        sql = '''SELECT image_id FROM img WHERE obs_id=%s and store_site_id=%s;'''
+        args = (obs_id,self.site_id)
+        result = self.sql_interface.query(sql,args)
+        print(result)
+        remote_site_info = self.fs.psg.get_channel(channel_id = site_target)
+        for i,r in result.iterrows():
+            img_id = r['image_id']
+            pp_target_site.create_dir(self,{"obj_type":"img","param_dict":{"image_id":img_id}},consume_site_id=site_target,consume_group_id=site_target)
+ 
+            path_remote,fn_remote = self.fs.get_dir_for_object('img',{'image_id':img_id},site_id = site_target)
+            path,fn = self.fs.get_dir_for_object('img',{'image_id':img_id},site_id = site_target)
+            os.system(f"scp {path}/{fn} {remote_site_info['user_name']}@{remote_site_info['process_site_ip']}:{path_remote}/{fn_remote}")
+            os.system(f"rm {path}/{fn}")
+
