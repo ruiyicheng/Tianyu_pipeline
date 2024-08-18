@@ -168,6 +168,7 @@ CREATE TABLE img(
     flat_image_id BIGINT DEFAULT NULL,
     dark_image_id BIGINT DEFAULT NULL,
     mask_image_id BIGINT DEFAULT NULL,
+    align_target_image_id BIGINT DEFAULT NULL,
     x_to_template INT DEFAULT NULL,
     y_to_template INT DEFAULT NULL,
     obs_id INT DEFAULT NULL,
@@ -180,6 +181,7 @@ CREATE TABLE img(
     FOREIGN KEY (birth_process_id) REFERENCES process_list(process_id),
     FOREIGN KEY (align_process_id) REFERENCES process_list(process_id),
     FOREIGN KEY (image_type_id) REFERENCES image_type(image_type_id),
+    FOREIGN KEY (align_target_image_id) REFERENCES img(image_id),
     FOREIGN KEY (flat_image_id) REFERENCES img(image_id),
     FOREIGN KEY (dark_image_id) REFERENCES img(image_id),
     FOREIGN KEY (obs_id) REFERENCES observation(obs_id), 
@@ -377,9 +379,9 @@ INSERT INTO target_n (target_name, target_type_id) VALUES ("bias",(SELECT target
 #INSERT INTO target_n (target_name, target_type_id) VALUES ("HAT-P-20",(SELECT target_type_id FROM target_type where target_type.target_type = 'star_field' LIMIT 1));
 
 INSERT INTO target_n (target_name, target_type_id) VALUES ("TrES5",(SELECT target_type_id FROM target_type where target_type.target_type = 'star_field' LIMIT 1));
+INSERT INTO target_n (target_name, target_type_id) VALUES ("HAT-P-7",(SELECT target_type_id FROM target_type where target_type.target_type = 'star_field' LIMIT 1));
 
-
-#select * from target_n;
+select * from target_n;
 #select * from obs_site;
 #select * from observer;
 INSERT INTO data_process_group (process_site_id) VALUES (1);
@@ -390,6 +392,7 @@ SELECT * FROM data_process_group;
 UPDATE data_process_site SET process_site_ip="127.0.1.1" where process_site_id=2;
 
 SELECT * FROM observation;
+update img set store_site_id=2;
 select * from img;
 DELETE FROM img where image_id <= 106;
 SHOW COLUMNS FROM img;

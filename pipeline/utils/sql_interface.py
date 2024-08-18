@@ -39,6 +39,9 @@ class sql_interface:
             return self._observer_id  
              
     def get_table_dict(self,table,index_key=1,index_value=0):
+        self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
+                            host='192.168.1.107',
+                            database='tianyudev')
         mycursor = self.cnx.cursor()
         mycursor.execute("SELECT * from "+table+";")
         myresult = mycursor.fetchall()
@@ -48,6 +51,9 @@ class sql_interface:
             res_dict[row[index_key]] = row[index_value]
         return res_dict
     def query(self,sql,args,return_df = True):
+        self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
+                            host='192.168.1.107',
+                            database='tianyudev')
         self.cnx.commit()
         mycursor = self.cnx.cursor()
         mycursor.execute(sql,args)

@@ -63,7 +63,11 @@ class process_publisher:
             consume_group_id=self.default_group_id         
         PID_this = self.publish_CMD(consume_site_id,consume_group_id,f'register|{param_dict}',[])
         return PID_this
-    def stacking(self,consume_site_id,consume_group_id,PIDs,num_image_limit = 5):
+    def stacking(self,PIDs,num_image_limit = 5,consume_site_id=-1,consume_group_id=-1):
+        if consume_site_id==-1:
+            consume_site_id=self.default_site_id
+        if consume_group_id==-1:
+            consume_group_id=self.default_group_id  
         Next_hierarchy_PID_list = []
         for i in range((len(PIDs)-1)//num_image_limit+1):
             stack_this = PIDs[i*num_image_limit:(i+1)*num_image_limit]
