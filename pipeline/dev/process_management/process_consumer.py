@@ -10,11 +10,12 @@ from Tianyu_pipeline.pipeline.utils import data_loader as dl
 from Tianyu_pipeline.pipeline.utils import sql_interface
 from Tianyu_pipeline.pipeline.dev.file_system import file_system as fs
 from Tianyu_pipeline.pipeline.utils import data_transfer as dt
-
+from Tianyu_pipeline.pipeline.image_process import image_processor as image_processor
 
 class process_consumer:
     def __init__(self,mode = 'test',pika_host = "192.168.1.107",site_id=1,group_id = 1,host_sql = '192.168.1.107',user_sql = 'tianyu', password_sql = 'tianyu'):
         self.sql_interface = sql_interface.sql_interface()
+        self.image_processor = image_processor.image_processor()
         self.pika_host = pika_host
         self.site_id, self.group_id = site_id,group_id
         self.connection = pika.BlockingConnection(
@@ -62,7 +63,7 @@ class process_consumer:
     def work(self,PID,cmd,par):
         print(f'Executing process {PID}, command {cmd} with parameter {par}')
         if cmd == 'stack':
-            pass
+            success = self.image_processor.stacking(PID,self.site_id,par = par)
         if cmd == 'init_dir':
             pass
         if cmd == 'register':
@@ -83,8 +84,8 @@ class process_consumer:
             pass
         if cmd == 'image_assess':
             pass
-        if cmd == 'alignment':
-            pass
+        if cmd == 'align':
+            success = self.image_processor.alignment(PID,par["template_birth_PID"],par["cal_birth_PID"])
         #time.sleep(0.5)
         #return 0
         if success:

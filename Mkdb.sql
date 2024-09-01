@@ -192,6 +192,8 @@ CREATE TABLE img(
 #SHOW COLUMNS from img;
 #ALTER TABLE img DROP column img_path;
 #ALTER TABLE img ADD column img_name TEXT;
+#ALTER TABLE img ADD column align_target_image_id BIGINT;
+#ALTER TABLE img ADD FOREIGN KEY (align_target_image_id) REFERENCES img(image_id);
 CREATE TABLE img_stacking(
     image_id BIGINT  NOT NULL,
     stacked_id BIGINT NOT NULL,
@@ -219,13 +221,15 @@ CREATE TABLE sky(
 );
 
 
-CREATE TABLE sky_template_map(
+CREATE TABLE sky_image_map(
 sky_id BIGINT,
-template_image_id BIGINT,
-in_use BOOLEAN DEFAULT 0,
-FOREIGN KEY (sky_id) REFERENCES img(image_id),
-FOREIGN KEY (template_image_id) REFERENCES img(image_id)
+image_id BIGINT,
+template_in_use BOOLEAN DEFAULT 0,
+FOREIGN KEY (sky_id) REFERENCES sky(sky_id),
+FOREIGN KEY (image_id) REFERENCES img(image_id)
 );
+
+#DROP TABLE sky_image_map;
 
 CREATE TABLE source_type(
     source_type_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
@@ -301,8 +305,10 @@ CREATE TABLE reference_star(
 CREATE TABLE source_crossmatch(
     gdr3_id BIGINT,
     panstarr_id BIGINT,
-    source_id BIGINT
+    source_id BIGINT,
+    FOREIGN KEY (source_id) REFERENCES tianyu_source(source_id)
 );
+#DROP TABLE source_crossmatch;
 #--site flag: 1:is_sql_server; 2:is pika server; 4: store the image; 8:telescope control; 16 data process center; 32 mission publisher; 64 visialization center
 #--group flag: 1: gpu; 2: large memory;
 
@@ -340,7 +346,12 @@ INSERT INTO image_type (image_type) values ("dark");
 INSERT INTO image_type (image_type) values ("dark_flat");
 INSERT INTO image_type (image_type) values ("bias");
 INSERT INTO image_type (image_type) values ("mask");
+INSERT INTO image_type (image_type) values ("background_rms");
+INSERT INTO image_type (image_type) values ("psf");
 
+
+
+SELECT * from image_type;
 INSERT INTO instrument (instrument_name,filter_id) VALUES ("L350+QHY600m",1);
 select * from instrument;
 

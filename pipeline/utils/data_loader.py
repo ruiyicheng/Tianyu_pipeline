@@ -12,21 +12,59 @@ class data_loader:
         self.sql_interface = sql_interface.sql_interface()
         self.file_system = fs.file_system()
 
+
+    def bind_sky_image(self,PID,is_template = False):
+        sky_img_PIDs = self.sql_interface.get_process_dependence(PID)
+        for pids in sky_img_PIDs:
+            sql = 'SELECT * FROM img WHERE img.birth_process_id = %s;'
+            args = (pids,)
+            result = self.sql_interface.query(sql,args)
+            if len(result!=1):
+                continue
+            else:
+                img_info_dict = result.to_dict('records')[0]
+                break
+
+        for pids in sky_img_PIDs:
+            sql = 'SELECT * FROM sky WHERE img.process_id = %s;'   
+            args = (pids,) 
+            if len(result!=1):
+                continue
+            else:
+                sky_info_dict = result.to_dict('records')[0]
+        mycursor = self.sql_interface.cnx.cursor()
+        if is_template:
+            args = (sky_info_dict['sky_id'],)
+            sql = 'UPDATE sky_image_map SET template_in_use=0 WHERE sky_id=%s;'
+            mycursor.execute(sql,args)
+            args = (sky_info_dict['sky_id'],img_info_dict['image_id'])
+            sql = 'INSERT INTO sky_image_map (sky_id,image_id,template_in_use) VALUES (%s,%s,1);'
+            mycursor.execute(sql,args)
+        else:
+            args = (sky_info_dict['sky_id'],img_info_dict['image_id'])
+            sql = 'INSERT INTO sky_image_map (sky_id,image_id,template_in_use) VALUES (%s,%s,0);'
+            mycursor.execute(sql,args)
+
+        self.sql_interface.cnx.commit()
+        return 1
+
     def register(self,PID,cmd,par):
 
         mycursor = self.sql_interface.cnx.cursor()
         sql = cmd
         mycursor.execute(sql,par)
         self.sql_interface.cnx.commit()
-        if sql.split(' ')[2]=='img' or sql.split(' ')[2]=='observation':#insert PID
+        if sql.split(' ')[2]=='img' or sql.split(' ')[2]=='observation' or sql.split(' ')[2]=='sky':#insert PID
             mycursor = self.sql_interface.cnx.cursor()
             mycursor.execute("SELECT LAST_INSERT_ID();")
             myresult = mycursor.fetchall()
             img_id = myresult[0][0] #auto_increment
             if sql.split(' ')[2]=='img':
                 sql = 'UPDATE img SET birth_process_id=%s where image_id=%s;'
-            else:
-                sql = 'UPDATE observation SET process_id=%s where obs_id=%s'
+            if sql.split(' ')[2]=='observation':
+                sql = 'UPDATE observation SET process_id=%s where obs_id=%s;'
+            if sql.split(' ')[2]=='sky':
+                sql = 'UPDATE observation SET process_id=%s where sky_id=%s;'                
             args = (PID,img_id)
             mycursor.execute(sql,args)
             self.sql_interface.cnx.commit()

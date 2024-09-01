@@ -277,6 +277,7 @@ class template_generator:
 
         if register:
             self.dl.cnx.commit()
+            
         if test:
             mag_list = []
             long_axis =  []

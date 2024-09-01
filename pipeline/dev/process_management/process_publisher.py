@@ -21,12 +21,35 @@ class process_publisher:
             return self._default_group_id
     def generate_PID(self):
         return (time.time_ns()+np.random.randint(0,1000))*100000+np.random.randint(0,100000)
+    def generate_template(self,calibrated_birth_PID):
+        pass
+    def calibrate(self,param_dict,consume_site_id=-1,consume_group_id=-1):
+        if consume_site_id==-1:
+            consume_site_id=self.default_site_id
+        if consume_group_id==-1:
+            consume_group_id=self.default_group_id
+        PID_dep = []
+        if "PID_sub" in param_dict:
+            PID_dep.append(param_dict['PID_sub'])
+        if "PID_div" in param_dict:
+            PID_dep.append(param_dict['PID_div'])
+        PID_this = self.publish_CMD(consume_site_id,consume_group_id,f'calibrate|{param_dict}',[PID_dep])
+        return PID_this
+
+    def align(self,template_birth_PID,cal_birth_PID,consume_site_id=-1,consume_group_id=-1):
+        if consume_site_id==-1:
+            consume_site_id=self.default_site_id
+        if consume_group_id==-1:
+            consume_group_id=self.default_group_id 
+        param_dict={'template_birth_PID':template_birth_PID,'cal_birth_PID':cal_birth_PID}
+        if type(cal_birth_PID)==list:
+            PID_dep_list = cal_birth_PID
+        else:
+            PID_dep_list = [cal_birth_PID]
+        PID_align = self.publish_CMD(consume_site_id,consume_group_id,f'align|{param_dict}',PID_dep_list)
+        return PID_align
     
-    def calibrate(self,PIDs):
-        PID_this = self.publish_CMD('calibrate',stack_this)
-        pass
-    def align(self,PID):
-        pass
+
     def transfer_img(self,param_dict,consume_site_id=-1,consume_group_id=-1):
         if consume_site_id==-1:
             consume_site_id=self.default_site_id
@@ -78,7 +101,7 @@ class process_publisher:
                 Next_hierarchy_PID_list.append(stack_this[0])
 
         if len(Next_hierarchy_PID_list)>1:
-            PID_ret = self.stacking(consume_site_id,consume_group_id,Next_hierarchy_PID_list,num_image_limit=num_image_limit)
+            PID_ret = self.stacking(Next_hierarchy_PID_list,num_image_limit=num_image_limit,consume_site_id=consume_site_id,consume_group_id=consume_group_id)
         else:
             return PID_this
         return PID_ret
