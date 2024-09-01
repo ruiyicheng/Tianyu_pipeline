@@ -63,7 +63,11 @@ class process_consumer:
     def work(self,PID,cmd,par):
         print(f'Executing process {PID}, command {cmd} with parameter {par}')
         if cmd == 'stack':
-            success = self.image_processor.stacking(PID,self.site_id,par = par)
+            if not "PID_type" in par:
+                PID_type = "birth"
+            else:
+                PID_type = par['PID_type']
+            success = self.image_processor.stacking(PID,self.site_id,PID_type = PID_type,par = par)
         if cmd == 'init_dir':
             pass
         if cmd == 'register':
@@ -81,7 +85,13 @@ class process_consumer:
         if cmd == 'data_receive':
             pass
         if cmd == 'calibrate':
-            pass
+            if not "PID_sub" in par:
+                par['PID_sub'] = -1
+            if not "PID_div" in par:
+                par['PID_div'] = -1
+            if not "subtract_bkg" in par:
+                par['subtract_bkg'] = 1
+            success = self.image_processor.calibration(PID,self.site_id,par['PID_cal'], sub_img_pid = -1, div_img_pid = -1,subtract_bkg = par['subtract_bkg'])
         if cmd == 'image_assess':
             pass
         if cmd == 'align':
