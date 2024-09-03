@@ -324,11 +324,13 @@ class image_processor:
         myresult = mycursor.fetchall()
         new_img_id = myresult[0][0] #auto_increment
         save_image_path,save_image_name = self.fs.get_dir_for_object("img",{"image_id":new_img_id})
+        success = self.fs.create_dir_for_object("img",{"image_id":new_img_id})
         if subtract_bkg:
             #import sep
             calibrated_image = calibrated_image.byteswap().newbyteorder()
             bkg = sep.Background(calibrated_image)
             calibrated_image = calibrated_image-bkg
+        
         fits.writeto(f"{save_image_path}/{save_image_name}",calibrated_image.astype('float32'),header = calibrated_image_header,overwrite=True)
 
             #args = (jd_utc_start,jd_utc_mid,jd_utc_end,bjd_tdb_start_approximation,bjd_tdb_mid_approximation,bjd_tdb_end_approximation,n_stack,processed,self.image_type_id[res_img_type],flat_image_id_used,bias_image_id_used,x_to_template,y_to_template,obs_id_this,this_outpath,0,hierarchy_this)
@@ -342,7 +344,7 @@ class image_processor:
             #     print("this_outpath saved at",this_outpath)
 
             #     return new_img_id
-        return 1 
+        return success
 if __name__=="__main__":
     clb = calibrator()
     #print(clb.stacking('/home/yichengrui/workspace/TianYu/pipeline/image_process/out/caliborate/superbias_mgo.fit',2,method = "median"))
