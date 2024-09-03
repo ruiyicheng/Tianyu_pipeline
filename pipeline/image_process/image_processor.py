@@ -281,10 +281,10 @@ class image_processor:
         calibrated_image = fits.getdata(f"{target_image_path}/{target_image_name}")
         calibrated_image_header = fits.getheader(f"{target_image_path}/{target_image_name}")
         new_target_image_name = f"cal_{process_PID}_{target_image_name}"
-        if self.sql_interface.image_type_id['raw']==img_target["image_type_id"]: 
-            img_type_id_this = self.sql_interface.image_type_id['calibrated_single']
-        if self.sql_interface.image_type_id['flat_raw']==img_target["image_type_id"]: 
-            img_type_id_this = self.sql_interface.image_type_id['flat_debiased']           
+        if 1==img_target["image_type_id"]: 
+            img_type_id_this = 2
+        if 5==img_target["image_type_id"]: 
+            img_type_id_this = 6         
 
         #this_outpath = process_PID
         #print(calibrated_image)
