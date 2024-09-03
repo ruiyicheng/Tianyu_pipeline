@@ -92,7 +92,7 @@ class process_consumer:
                 par['PID_div'] = -1
             if not "subtract_bkg" in par:
                 par['subtract_bkg'] = 1
-            success = self.image_processor.calibration(PID,self.site_id,par['PID_cal'], sub_img_pid = -1, div_img_pid = -1,subtract_bkg = par['subtract_bkg'])
+            success = self.image_processor.calibration(PID,self.site_id,par['PID_cal'], sub_img_pid = par['PID_sub'], div_img_pid = par['PID_div'],subtract_bkg = par['subtract_bkg'])
         if cmd == 'image_assess':
             pass
         if cmd == 'align':

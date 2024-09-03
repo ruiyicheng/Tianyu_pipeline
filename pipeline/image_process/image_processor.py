@@ -267,11 +267,11 @@ class image_processor:
         img_target = result.to_dict("records")[0]
 
         if sub_img_pid>0:
-            sub_file_path,sub_file_name = fs.get_dir_for_object("img",{"birth_pid":sub_img_pid})
+            sub_file_path,sub_file_name = self.fs.get_dir_for_object("img",{"birth_pid":sub_img_pid})
             sub_img = fits.getdata(f"{sub_file_path}/{sub_file_name}")
 
         if div_img_pid>0:
-            div_file_path,div_file_name = fs.get_dir_for_object("img",{"birth_pid":div_img_pid})
+            div_file_path,div_file_name = self.fs.get_dir_for_object("img",{"birth_pid":div_img_pid})
             div_img = fits.getdata(f"{div_file_path}/{div_file_name}")          
 
 
@@ -313,7 +313,7 @@ class image_processor:
         mycursor.execute("SELECT LAST_INSERT_ID();")
         myresult = mycursor.fetchall()
         new_img_id = myresult[0][0] #auto_increment
-        save_image_path,save_image_name = fs.get_dir_for_object("img",{"image_id":new_img_id})
+        save_image_path,save_image_name = self.fs.get_dir_for_object("img",{"image_id":new_img_id})
         if subtract_bkg:
             #import sep
             calibrated_image = calibrated_image.byteswap().newbyteorder()
