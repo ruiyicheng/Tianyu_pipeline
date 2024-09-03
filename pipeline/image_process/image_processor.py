@@ -156,7 +156,8 @@ class image_processor:
     def stacking(self,PID,site_id,method = "mean",PID_type = "birth",ret='success',par = {}):
 
         def nanaverage(A,weights,axis):
-            return np.nansum(A*weights,axis=axis)/((~np.isnan(A))*weights).sum(axis=axis)
+            w = weights.reshape(A.shape[0],1,1)
+            return np.nansum(A*w,axis=axis)/((~np.isnan(A))*w).sum(axis=axis)
         
         res_query = self.get_dep_img(PID,process_type=PID_type)
         path_first_file,name_first_file = self.fs.get_dir_for_object("img",{"image_id":res_query[0]['image_id']})
