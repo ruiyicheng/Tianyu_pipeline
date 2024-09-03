@@ -281,7 +281,7 @@ class image_processor:
             args = (div_img_pid,)
             result = self.sql_interface.query(sql,args)
             assert len(result)==1
-            sub_img_id = result.to_dict("records")[0]['image_id'] 
+            div_img_id = result.to_dict("records")[0]['image_id'] 
 
 
         # for img_target in img_2_cal:
