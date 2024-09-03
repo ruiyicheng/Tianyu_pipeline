@@ -161,7 +161,7 @@ class image_processor:
         res_query = self.get_dep_img(PID,process_type=PID_type)
         path_first_file,name_first_file = self.fs.get_dir_for_object("img",{"image_id":res_query[0]['image_id']})
         header0 = fits.getheader(f"{path_first_file}/{name_first_file}")
-        res_dict = np.empty((len(myresult),*(fits.getdata(f"{path_first_file}/{name_first_file}").shape)))#,dtype = np.uint16)
+        res_dict = np.empty((len(res_query),*(fits.getdata(f"{path_first_file}/{name_first_file}").shape)))#,dtype = np.uint16)
         res_dict[:] = np.nan
         print('importing data...')
 
@@ -229,9 +229,9 @@ class image_processor:
         mycursor = self.sql_interface.cnx.cursor()
         sql = "INSERT INTO img (jd_utc_start,jd_utc_mid,jd_utc_end,n_stack,processed,image_type_id,flat_image_id,bias_image_id,dark_image_id,x_to_template,y_to_template,obs_id,img_name,deleted,align_target_image_id,batch,store_site_id,birth_process_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
         mycursor.execute(sql,args)
-        self.cnx.commit()
+        self.sql_interface.cnx.commit()
 
-        mycursor = self.cnx.cursor()
+        mycursor = self.sql_interface.cnx.cursor()
         mycursor.execute("SELECT LAST_INSERT_ID();")
         myresult = mycursor.fetchall()
         new_img_id = myresult[0][0] #auto_increment
@@ -242,7 +242,7 @@ class image_processor:
             args = (new_img_id,i)
             sql = "INSERT INTO img_stacking (image_id,stacked_id) VALUES (%s,%s)"
             mycursor.execute(sql,args)
-            self.cnx.commit()
+            self.sql_interface.cnx.commit()
         if ret=="success":
             return 1
         if ret=="new_id":
@@ -250,7 +250,7 @@ class image_processor:
     
     def calibration(self,process_PID,site_id,cal_img_pid, sub_img_pid = -1, div_img_pid = -1,subtract_bkg = True,debug = True):#,obs_id=1,hierarchy=2,img_type = "flat_raw",consider_flat = True,consider_bias = True,bias_id = 2,bias_hierarchy = 2,flat_id = 1,flat_hierarchy = 2,keep_origin = True,outpath="samedir",debug = False):
         # img_2_cal = self.get_dep_img(process_PID)
-        # # mycursor = self.cnx.cursor()
+        # # mycursor = self.sql_interface.cnx.cursor()
         # # sql = "SELECT * from img where img.obs_id = %s AND img.image_type_id = %s AND !deleted AND hierarchy = %s;"
         # # args = (obs_id,self.image_type_id[img_type],hierarchy)
         # # mycursor.execute(sql,args)
@@ -304,11 +304,11 @@ class image_processor:
         mycursor = self.sql_interface.cnx.cursor()
         sql = "INSERT INTO img (jd_utc_start,jd_utc_mid,jd_utc_end,n_stack,processed,image_type_id,flat_image_id,bias_image_id,dark_image_id,x_to_template,y_to_template,obs_id,img_name,deleted,align_target_image_id,batch,store_site_id,birth_process_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
         mycursor.execute(sql,args)
-        self.cnx.commit()
+        self.sql_interface.cnx.commit()
 
 
 
-        mycursor = self.cnx.cursor()
+        mycursor = self.sql_interface.cnx.cursor()
         mycursor.execute("SELECT LAST_INSERT_ID();")
         myresult = mycursor.fetchall()
         new_img_id = myresult[0][0] #auto_increment
@@ -324,10 +324,10 @@ class image_processor:
             #print(len(args))
             #print(self.obs_id)
             # if not debug:
-            #     mycursor = self.cnx.cursor()
+            #     mycursor = self.sql_interface.cnx.cursor()
             #     sql = "INSERT INTO img (jd_utc_start,jd_utc_mid,jd_utc_end,bjd_tdb_start_approximation,bjd_tdb_mid_approximation,bjd_tdb_end_approximation,n_stack,processed,image_type_id,flat_image_id,bias_image_id,x_to_template,y_to_template,obs_id,img_path,deleted,hierarchy) VALUES (%s"+",%s"*(len(args)-1)+")"
             #     mycursor.execute(sql,args)
-            #     self.cnx.commit()
+            #     self.sql_interface.cnx.commit()
             #     print("this_outpath saved at",this_outpath)
 
             #     return new_img_id

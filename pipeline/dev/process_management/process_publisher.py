@@ -24,10 +24,10 @@ class process_publisher:
         return (time.time_ns()+np.random.randint(0,1000))*100000+np.random.randint(0,100000)
     
 
-    def reduction_nighty_obs(self,obs_id,PID_sub,PID_div,sky_id):
+    # def reduction_nighty_obs(self,obs_id,PID_sub,PID_div,sky_id):
 
-        pid_cal_list = self.calibrate_observation(obs_id,PID_sub,PID_div)
-        self.generate_template(pid_cal_list,sky_id)
+    #     pid_cal_list = self.calibrate_observation(obs_id,PID_sub,PID_div)
+    #     self.generate_template(pid_cal_list,sky_id)
 
         
     def reduction_nighty_obs(self,calibrated_birth_PID_list,sky_id,template_birth_PID = -1):
@@ -115,7 +115,7 @@ class process_publisher:
             PID_dep.append(param_dict['PID_sub'])
         if "PID_div" in param_dict:
             PID_dep.append(param_dict['PID_div'])
-        PID_this = self.publish_CMD(consume_site_id,consume_group_id,f'calibrate|{param_dict}',[PID_dep])
+        PID_this = self.publish_CMD(consume_site_id,consume_group_id,f'calibrate|{param_dict}',PID_dep)
         return PID_this
 
     def align(self,template_birth_PID,cal_birth_PID,consume_site_id=-1,consume_group_id=-1):
