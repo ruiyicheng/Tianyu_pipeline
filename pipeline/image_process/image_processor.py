@@ -266,8 +266,8 @@ class image_processor:
         assert len(result)==1
         img_target = result.to_dict("records")[0]
         sql = "SELECT * FROM img WHERE birth_process_id=%s;"
-        sub_img_id = -1
-        div_img_id = -1
+        sub_img_id = None
+        div_img_id = None
         if sub_img_pid>0:
             sub_file_path,sub_file_name = self.fs.get_dir_for_object("img",{"birth_pid":sub_img_pid})
             sub_img = fits.getdata(f"{sub_file_path}/{sub_file_name}")
