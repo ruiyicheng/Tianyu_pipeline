@@ -40,6 +40,7 @@ class process_publisher:
         # Operation for the already-generated template 
         pid_select = self.select_good_img(align_pid_list)
 
+
         # align the template to origin template of sky
         # select the img to stack 
         # stacking new template
@@ -69,7 +70,7 @@ class process_publisher:
             'sky_id': sky_id,
             'as_new_template': as_new_template
         }
-        return self.publish_CMD(self.default_site_id, self.default_group_id, f'new_template_stars|{param_dict}', [new_template_PID, sky_pid])
+        return self.publish_CMD(self.default_site_id, self.default_group_id, f'detect_source|{param_dict}', [new_template_PID, sky_pid])
 
     def calibrate_observation(self,obs_id,PID_sub,PID_div):
         sql = 'SELECT birth_process_id FROM img WHERE obs_id = %s and n_stack=1;'

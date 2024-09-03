@@ -25,6 +25,7 @@ class process_consumer:
         self.fs = fs.file_system()
         self.ft = dt.file_transferer()
         self.channel.queue_declare(queue=f'command_queue_{self.site_id}_{self.group_id}', durable=True)
+        
     # def queue_db(self,sql,argsql):
     #     mycursor = self.sql_interface.cnx.cursor()
     #     mycursor.execute(sql,argsql)

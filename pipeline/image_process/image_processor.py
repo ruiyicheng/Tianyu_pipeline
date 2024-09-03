@@ -15,16 +15,16 @@ class image_processor:
         self.psg = psg.process_site_getter()
         self.site_info = self.psg.get_channel()
 
-        if site_id==-1:
-            site_id = self.site_info['site_id']
-        if group_id==-1:
-            group_id = site_id
+        # if site_id==-1:
+        #     site_id = self.site_info['site_id']
+        # if group_id==-1:
+        #     group_id = site_id
 
         self.fs = fs.file_system()
         self.sql_interface = sql_interface.sql_interface()
         #self.pp_this_site = process_pub.process_publisher(site_id = site_id, group_id = group_id)
 
-    def resolve_sky_star(self,sky_pid,obs_pid):
+    def detect_source(self,img_pid,sky_pid,as_new_template = True):
         pass
     # def generate_template_image(self,site_id,sky_id,obs_id,n_stack=1):
     #     #align stack map to sky

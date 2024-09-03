@@ -164,6 +164,7 @@ CREATE TABLE img(
     n_star_resolved INT,
     batch INT DEFAULT 1,
     processed BOOLEAN DEFAULT 0, 
+    used_as_template BOOLEAN DEFAULT 0, 
     image_type_id INT,
     flat_image_id BIGINT DEFAULT NULL,
     dark_image_id BIGINT DEFAULT NULL,
@@ -194,6 +195,7 @@ CREATE TABLE img(
 #ALTER TABLE img ADD column img_name TEXT;
 #ALTER TABLE img ADD column align_target_image_id BIGINT;
 #ALTER TABLE img ADD FOREIGN KEY (align_target_image_id) REFERENCES img(image_id);
+ALTER TABLE img ADD column used_as_template BOOLEAN DEFAULT 0;
 CREATE TABLE img_stacking(
     image_id BIGINT  NOT NULL,
     stacked_id BIGINT NOT NULL,
@@ -225,12 +227,15 @@ CREATE TABLE sky_image_map(
 sky_id BIGINT,
 image_id BIGINT,
 template_in_use BOOLEAN DEFAULT 0,
+absolute_deviation_x INT DEFAULT 0,
+absolute_deviation_y INT DEFAULT 0,
 FOREIGN KEY (sky_id) REFERENCES sky(sky_id),
 FOREIGN KEY (image_id) REFERENCES img(image_id)
 );
 
 #DROP TABLE sky_image_map;
-
+ALTER TABLE sky_image_map ADD COLUMN absolute_deviation_x INT DEFAULT 0;
+ALTER TABLE sky_image_map ADD COLUMN absolute_deviation_y INT DEFAULT 0;
 CREATE TABLE source_type(
     source_type_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
     source_type TEXT
@@ -243,14 +248,29 @@ CREATE TABLE tianyu_source(
     source_id BIGINT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
     source_type_id INT NOT NULL,
     sky_id BIGINT,
+    FOREIGN KEY (source_type_id) REFERENCES source_type(source_type_id),
+    FOREIGN KEY (sky_id) REFERENCES sky(sky_id)
+);
+
+
+CREATE TABLE tianyu_source_position(
+    source_id BIGINT NOT NULL,
+    template_img_id BIGINT NOT NULL,
     x_template DOUBLE,
     y_template DOUBLE,
     flux_template DOUBLE,
     e_flux_template FLOAT,
     INDEX(flux_template) USING BTREE,
-    FOREIGN KEY (source_type_id) REFERENCES source_type(source_type_id),
-    FOREIGN KEY (sky_id) REFERENCES sky(sky_id)
+    FOREIGN KEY (source_id) REFERENCES tianyu_source(source_id),
+    FOREIGN KEY (template_img_id) REFERENCES img(image_id)
 );
+
+SHOW COLUMNS FROM tianyu_source;
+
+ALTER TABLE tianyu_source DROP COLUMN x_template;
+ALTER TABLE tianyu_source DROP COLUMN y_template;
+ALTER TABLE tianyu_source DROP COLUMN flux_template;
+ALTER TABLE tianyu_source DROP COLUMN e_flux_template;
 
 #DROP TABLE star_pixel_img;
 
