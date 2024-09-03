@@ -265,14 +265,23 @@ class image_processor:
         result = self.sql_interface.query(sql,args)
         assert len(result)==1
         img_target = result.to_dict("records")[0]
+        sql = "SELECT * FROM img WHERE birth_process_id=%s;"
 
         if sub_img_pid>0:
             sub_file_path,sub_file_name = self.fs.get_dir_for_object("img",{"birth_pid":sub_img_pid})
             sub_img = fits.getdata(f"{sub_file_path}/{sub_file_name}")
+            args = (sub_img_pid,)
+            result = self.sql_interface.query(sql,args)
+            assert len(result)==1
+            sub_img_id = result.to_dict("records")[0]['image_id']
 
         if div_img_pid>0:
             div_file_path,div_file_name = self.fs.get_dir_for_object("img",{"birth_pid":div_img_pid})
-            div_img = fits.getdata(f"{div_file_path}/{div_file_name}")          
+            div_img = fits.getdata(f"{div_file_path}/{div_file_name}")         
+            args = (div_img_pid,)
+            result = self.sql_interface.query(sql,args)
+            assert len(result)==1
+            sub_img_id = result.to_dict("records")[0]['image_id'] 
 
 
         # for img_target in img_2_cal:
