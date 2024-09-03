@@ -277,7 +277,7 @@ class image_processor:
 
         # for img_target in img_2_cal:
         #image_id,jd_utc_start,jd_utc_mid,jd_utc_end,bjd_tdb_start_approximation,bjd_tdb_mid_approximation,bjd_tdb_end_approximation,n_stack,processed,image_type_id,flat_image_id,bias_image_id,x_to_template,y_to_template,obs_id_this,img_path_this,deleted_this,hierarchy_this = pic
-        target_image_path,target_image_name = fs.get_dir_for_object("img",{"image_id":img_target["image_id"]})
+        target_image_path,target_image_name = self.fs.get_dir_for_object("img",{"image_id":img_target["image_id"]})
         calibrated_image = fits.getdata(f"{target_image_path}/{target_image_name}")
         calibrated_image_header = fits.getheader(f"{target_image_path}/{target_image_name}")
         new_target_image_name = f"cal_{process_PID}_{target_image_name}"
