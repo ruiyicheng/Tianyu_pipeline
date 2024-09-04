@@ -67,7 +67,7 @@ class process_publisher:
         """
         param_dict = {
             'new_template_PID': new_template_PID,
-            'sky_id': sky_id,
+            'sky_id': sky_pid,
             'as_new_template': as_new_template
         }
         return self.publish_CMD(self.default_site_id, self.default_group_id, f'detect_source|{param_dict}', [new_template_PID, sky_pid])
@@ -79,7 +79,7 @@ class process_publisher:
         pid_frame_list = list(result['birth_process_id'])
         pid_cal_list = []
         for PID_frame in pid_frame_list:
-            pid_cal_list.append(self.calibrate({'PID_cal':PID_frame,'PID_sub':PID_sub,'PID_div':PID_div}))
+            pid_cal_list.append(self.calibrate({'PID_cal':int(PID_frame),'PID_sub':PID_sub,'PID_div':PID_div}))
         return pid_cal_list
 
 

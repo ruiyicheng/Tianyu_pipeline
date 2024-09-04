@@ -4,12 +4,14 @@
 #pp_this.register_info({"cmd":"INSERT INTO observation (observation_type_id,target_id,batch_size,instrument_id,obs_site_id,observer_id,bin_size) values (%s,%s,%s,%s,%s,%s,%s)","args":"[1,6,50,1,1,2,1]"})
 #pp_this.register_info({"cmd":"INSERT INTO observation (observation_type_id,target_id,batch_size,instrument_id,obs_site_id,observer_id,bin_size) values (%s,%s,%s,%s,%s,%s,%s)","args":"[1,8,5,1,1,2,1]"})
 #pp_this.register_info({"cmd":"INSERT INTO observation (observation_type_id,target_id,batch_size,instrument_id,obs_site_id,observer_id,bin_size) values (%s,%s,%s,%s,%s,%s,%s)","args":"[1,9,5,1,1,2,1]"})
+use tianyudev;
 SELECT * FROM obs_site;
 SELECT * FROM observer;
 select * from target_n;
+select * from observation LEFT JOIN target_n on observation.target_id=target_n.target_id;
 #select * from obs_site;
 #select * from observer;
-
+SELECT * FROM process_list;
 SELECT * FROM data_process_site;
 SELECT * FROM data_process_group;
 
