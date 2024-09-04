@@ -327,8 +327,8 @@ class image_processor:
         success = self.fs.create_dir_for_object("img",{"image_id":new_img_id})
         if subtract_bkg:
             #import sep
-            calibrated_image = calibrated_image.byteswap().newbyteorder()
-            bkg = sep.Background(calibrated_image)
+            #calibrated_image = calibrated_image.byteswap().newbyteorder()
+            bkg = sep.Background(calibrated_image.astype("float32"))
             calibrated_image = calibrated_image-bkg
         
         fits.writeto(f"{save_image_path}/{save_image_name}",calibrated_image.astype('float32'),header = calibrated_image_header,overwrite=True)
