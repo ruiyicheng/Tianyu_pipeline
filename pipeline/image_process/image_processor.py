@@ -79,26 +79,26 @@ class image_processor:
     
 
 
-    def alignment(self,PID,template_img_pid,target_img_pid,max_deviation = 400):
+    def alignment(self,PID,template_img_pid,target_img_pid,max_deviation = 400,resolve_sigma = 50,minarea = 30):
         # Align 2 image! 2 possibility
         # 1 template_img not resolved, need to resolve the target in template_img
         # 2 template_img resolved, need to get star position from db
         
-
-        sql = "SELECT sim.image_id as image_id,ts.source_id as source_id, ts.x_template as x_template,ts.y_template as y_template FROM sky_image_map AS sim INNER JOIN sky on sky.sky_id=sim.sky_id INNER JOIN tianyu_source as ts on ts.sky_id=sky.sky_id WHERE template_in_use=1 AND birth_process_id=%s;"
+        sql = "SELECT tsp.x_template as x_template, tsp.y_template as y_template FROM img INNER JOIN tianyu_source_position as tsp on img.image_id = tsp.image_id WHERE img.birth_process_id = %s"
         args = (template_img_pid,)
         result = self.sql_interface.query(sql,args)
-        if len(result)>=1:# resolved template image
+        if len(result)>=10:# resolved template image
+            print("Image resolved")
             x_stars_template = np.array(result['x_template'])
             y_stars_template = np.array(result['y_template'])
-        if result==0: # not resolved image
+        else: # not resolved image
             print("Resolving stars in template image using sextractor...")
             img_folder,img_name = self.fs.get_dir_for_object("img",{"birth_pid":template_img_pid})
             img_path = f"{img_folder}/{img_name}"
             img_data = fits.getdata(img_path).byteswap().newbyteorder()
-            objects = sep.extract(img_data,50,minarea=30)
+            objects = sep.extract(img_data,resolve_sigma,minarea=minarea)
             if len(objects)<3:
-                print('Too few star resolved in image')
+                print('Too few star resolved in template image')
                 return 0
             x_stars_template = objects['x']
             y_stars_template = objects['y']
@@ -116,9 +116,9 @@ class image_processor:
         #for target_img_pid in target_img_pid_list:
         img_folder,img_name = self.fs.get_dir_for_object("img",{"birth_pid":target_img_pid})
         img_data = fits.getdata(img_path).byteswap().newbyteorder()
-        objects = sep.extract(img_data,50,minarea=30)
+        objects = sep.extract(img_data,resolve_sigma,minarea=minarea)
         if len(objects)<3:
-            print('Too few star resolved in image')
+            print('Too few star resolved in target image')
             return 0
 
         # fits_data = self.se.use(res[1],keep_out = False,use_sep = True)
@@ -144,7 +144,7 @@ class image_processor:
         idx = np.argmax(yhist)
         yshift = int((ybins[idx]+ybins[idx+1])/2.0)
         #res_list.append([res[2],xshift,yshift,np.sum((lambda1/lambda2)<good_star_threshold)/len(lambda1),len(lambda2)])
-        print(xshift,yshift)
+        print("Alignment result:",xshift,yshift)
         
         arg = (xshift,yshift,PID,template_img_id,len(objects),target_img_pid)
         mycursor = self.sql_interface.cnx.cursor()

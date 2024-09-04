@@ -51,6 +51,11 @@ class file_transferer:
             success = self.fs.create_dir_for_object('img',{'birth_pid':PID})
 
             os.system(f"mv {fp} {obs_folder_path}/{file_name}")
+        mycursor = self.sql_interface.cnx.cursor()
+        sql = 'UPDATE observation SET n_pic=%s where obs_id=%s;'
+        args = (len(file_paths),observation_id)
+        mycursor.execute(sql,args)
+        self.sql_interface.cnx.commit()
         self.pp_this_site.load_UTC(PID_list)
 
 

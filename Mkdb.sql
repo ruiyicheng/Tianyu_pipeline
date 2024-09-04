@@ -52,12 +52,7 @@ CREATE TABLE process_dependence(
 );
 
 
-#DROP TABLE process_dependence;
-INSERT INTO process_type (process_status) VALUES ("WAITING");
-INSERT INTO process_type (process_status) VALUES ("IN QUEUE");
-INSERT INTO process_type (process_status) VALUES ("RUNNING");
-INSERT INTO process_type (process_status) VALUES ("FAIL");
-INSERT INTO process_type (process_status) VALUES ("FINISH");
+
 
 CREATE TABLE observation_type(
     observation_type_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
@@ -195,7 +190,7 @@ CREATE TABLE img(
 #ALTER TABLE img ADD column img_name TEXT;
 #ALTER TABLE img ADD column align_target_image_id BIGINT;
 #ALTER TABLE img ADD FOREIGN KEY (align_target_image_id) REFERENCES img(image_id);
-ALTER TABLE img ADD column used_as_template BOOLEAN DEFAULT 0;
+#ALTER TABLE img ADD column used_as_template BOOLEAN DEFAULT 0;
 CREATE TABLE img_stacking(
     image_id BIGINT  NOT NULL,
     stacked_id BIGINT NOT NULL,
@@ -212,6 +207,7 @@ CREATE TABLE img_stacking(
 
 CREATE TABLE sky(
     sky_id BIGINT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    target_id INT DEFAULT NULL,
     ra DOUBLE DEFAULT NULL,
     `dec` DOUBLE DEFAULT NULL,
     fov_x DOUBLE DEFAULT NULL,
@@ -219,7 +215,8 @@ CREATE TABLE sky(
     scan_angle DOUBLE DEFAULT 0,
     fov_pos GEOMETRY SRID 4326,
     process_id DECIMAL(25),
-    FOREIGN KEY (process_id) REFERENCES process_list(process_id)
+    FOREIGN KEY (process_id) REFERENCES process_list(process_id),
+    FOREIGN KEY (target_id) REFERENCES target_n(target_id)
 );
 
 
@@ -234,8 +231,8 @@ FOREIGN KEY (image_id) REFERENCES img(image_id)
 );
 
 #DROP TABLE sky_image_map;
-ALTER TABLE sky_image_map ADD COLUMN absolute_deviation_x INT DEFAULT 0;
-ALTER TABLE sky_image_map ADD COLUMN absolute_deviation_y INT DEFAULT 0;
+#ALTER TABLE sky_image_map ADD COLUMN absolute_deviation_x INT DEFAULT 0;
+#ALTER TABLE sky_image_map ADD COLUMN absolute_deviation_y INT DEFAULT 0;
 CREATE TABLE source_type(
     source_type_id INT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
     source_type TEXT
@@ -264,15 +261,6 @@ CREATE TABLE tianyu_source_position(
     FOREIGN KEY (source_id) REFERENCES tianyu_source(source_id),
     FOREIGN KEY (template_img_id) REFERENCES img(image_id)
 );
-
-SHOW COLUMNS FROM tianyu_source;
-
-ALTER TABLE tianyu_source DROP COLUMN x_template;
-ALTER TABLE tianyu_source DROP COLUMN y_template;
-ALTER TABLE tianyu_source DROP COLUMN flux_template;
-ALTER TABLE tianyu_source DROP COLUMN e_flux_template;
-
-#DROP TABLE star_pixel_img;
 
 CREATE TABLE star_pixel_img(
     star_pixel_img_id BIGINT UNIQUE NOT NULL PRIMARY KEY AUTO_INCREMENT,
@@ -332,110 +320,3 @@ CREATE TABLE source_crossmatch(
 #--site flag: 1:is_sql_server; 2:is pika server; 4: store the image; 8:telescope control; 16 data process center; 32 mission publisher; 64 visialization center
 #--group flag: 1: gpu; 2: large memory;
 
-
-
-
-
-
-INSERT INTO data_process_site (process_site_name,process_site_ip,process_site_flag,file_path,user_name) VALUES ('macbook_rui','192.168.1.102',96,'/Users/ruiyicheng/Documents/code/projects/TianYu/debug_Tianyu_file_system','ruiyicheng');
-INSERT INTO data_process_site (process_site_name,process_site_ip,process_site_flag,file_path,user_name) VALUES ('control_desktop','192.168.1.106',40,'/mnt/d/Tianyu_data','root');
-INSERT INTO data_process_site (process_site_name,process_site_ip,process_site_flag,file_path,user_name) VALUES ('data_desktop','192.168.1.107',55,'/media/test/nf/mgo_data','test');
-UPDATE data_process_site SET process_site_ip="192.168.1.100" where process_site_name='macbook_rui';
-UPDATE data_process_site SET process_site_ip="172.20.119.167" where process_site_name='control_desktop';
-
-select * from data_process_site;
-
-INSERT INTO filters (filter_name) values ("L");
-INSERT INTO filters (filter_name) values ("R");
-INSERT INTO filters (filter_name) values ("G");
-INSERT INTO filters (filter_name) values ("B");
-INSERT INTO filters (filter_name) values ("Halpha");
-INSERT INTO filters (filter_name) values ("OIII");
-INSERT INTO filters (filter_name) values ("SII");
-INSERT INTO filters (filter_name) values ("Solar");
-INSERT INTO filters (filter_name) values ("Dark");
-INSERT INTO filters (filter_name) values ("None");
-
-INSERT INTO image_type (image_type) values ("raw");
-INSERT INTO image_type (image_type) values ("calibrated_single");
-INSERT INTO image_type (image_type) values ("calibrated_stacked");
-INSERT INTO image_type (image_type) values ("calibrated_difference");
-INSERT INTO image_type (image_type) values ("flat_raw");
-INSERT INTO image_type (image_type) values ("flat_debiased");
-INSERT INTO image_type (image_type) values ("dark");
-INSERT INTO image_type (image_type) values ("dark_flat");
-INSERT INTO image_type (image_type) values ("bias");
-INSERT INTO image_type (image_type) values ("mask");
-INSERT INTO image_type (image_type) values ("background_rms");
-INSERT INTO image_type (image_type) values ("psf");
-
-
-
-SELECT * from image_type;
-INSERT INTO instrument (instrument_name,filter_id) VALUES ("L350+QHY600m",1);
-select * from instrument;
-
-INSERT INTO obs_site (obs_site_name,obs_site_lon,obs_site_lat,obs_site_height,process_site_id) VALUES ("TDLI_MGO",121.60805556,31.164722222,1,2);
-#UPDATE obs_site SET process_site_id = 2;
-select * from observation_type;
-INSERT INTO observation_type (observation_type_name) VALUES ("science");
-INSERT INTO observation_type (observation_type_name) VALUES ("outreach");
-
-INSERT INTO observer_type (observer_type) VALUES ("researcher");
-INSERT INTO observer_type (observer_type) VALUES ("visitor");
-INSERT INTO observer_type (observer_type) VALUES ("robot");
-
-INSERT INTO observer (observer_name,observer_type_id) VALUES ("robot",3);
-INSERT INTO observer (observer_name,observer_type_id) VALUES ("Yicheng Rui",1);
-
-INSERT INTO target_type (target_type) VALUES ("calibration");
-INSERT INTO target_type (target_type) VALUES ("star_field");
-INSERT INTO target_type (target_type) VALUES ("moon");
-INSERT INTO target_type (target_type) VALUES ("planet");
-INSERT INTO target_type (target_type) VALUES ("sun");
-INSERT INTO target_type (target_type) VALUES ("cluster");
-INSERT INTO target_type (target_type) VALUES ("nebula");
-INSERT INTO target_type (target_type) VALUES ("galaxy");
-
-select target_type_id as tgid from target_type where target_type="calibration";
-
-
-INSERT INTO target_n (target_name, target_type_id) VALUES ("sun",(SELECT target_type_id FROM target_type where target_type.target_type = 'sun' LIMIT 1));
-INSERT INTO target_n (target_name, target_type_id) VALUES ("moon",(SELECT target_type_id FROM target_type where target_type.target_type = 'moon' LIMIT 1));
-INSERT INTO target_n (target_name, target_type_id) VALUES ("jupiter",(SELECT target_type_id FROM target_type where target_type.target_type = 'planet' LIMIT 1));
-INSERT INTO target_n (target_name, target_type_id) VALUES ("saturn",(SELECT target_type_id FROM target_type where target_type.target_type = 'planet' LIMIT 1));
-INSERT INTO target_n (target_name, target_type_id) VALUES ("flat",(SELECT target_type_id FROM target_type where target_type.target_type = 'calibration' LIMIT 1));
-INSERT INTO target_n (target_name, target_type_id) VALUES ("dark",(SELECT target_type_id FROM target_type where target_type.target_type = 'calibration' LIMIT 1));
-INSERT INTO target_n (target_name, target_type_id) VALUES ("bias",(SELECT target_type_id FROM target_type where target_type.target_type = 'calibration' LIMIT 1));
-#INSERT INTO target_n (target_name, target_type_id) VALUES ("HAT-P-20",(SELECT target_type_id FROM target_type where target_type.target_type = 'star_field' LIMIT 1));
-
-INSERT INTO target_n (target_name, target_type_id) VALUES ("TrES5",(SELECT target_type_id FROM target_type where target_type.target_type = 'star_field' LIMIT 1));
-INSERT INTO target_n (target_name, target_type_id) VALUES ("HAT-P-7",(SELECT target_type_id FROM target_type where target_type.target_type = 'star_field' LIMIT 1));
-
-select * from target_n;
-#select * from obs_site;
-#select * from observer;
-INSERT INTO data_process_group (process_site_id) VALUES (1);
-INSERT INTO data_process_group (process_site_id) VALUES (2);
-INSERT INTO data_process_group (process_site_id) VALUES (3);
-SELECT * FROM data_process_site;
-SELECT * FROM data_process_group;
-UPDATE data_process_site SET process_site_ip="127.0.1.1" where process_site_id=2;
-
-SELECT * FROM observation;
-update img set store_site_id=2;
-select * from img;
-DELETE FROM img where image_id <= 106;
-SHOW COLUMNS FROM img;
-SELECT * FROM image_type;
-#DELETE FROM observation where instrument_id=1;
-SELECT * FROM process_list where not process_status_id=5 ORDER BY process_id;
-SELECT * FROM process_dependence;
-DELETE FROM process_dependence where master_process_id>=172536124408331453994081 or dependence_process_id>=172536124408331453994081;
-DELETE FROM process_list where process_id>=172536124408331453994081;
-DELETE FROM process_list where process_id=172355258233725582503290;
-#SHOW TABLES;
-#DROP TABLE process;
-SELECT * FROM data_process_site;
-SELECT * from observation;
-SELECT * from img where obs_id=3;
