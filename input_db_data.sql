@@ -3,9 +3,13 @@
 #DROP TABLE source_crossmatch;
 #--site flag: 1:is_sql_server; 2:is pika server; 4: store the image; 8:telescope control; 16 data process center; 32 mission publisher; 64 visialization center
 #--group flag: 1: gpu; 2: large memory;
+USE tianyudev;
 
-
-
+INSERT INTO process_type (process_status) VALUES ("WAITING");
+INSERT INTO process_type (process_status) VALUES ("IN QUEUE");
+INSERT INTO process_type (process_status) VALUES ("RUNNING");
+INSERT INTO process_type (process_status) VALUES ("FAIL");
+INSERT INTO process_type (process_status) VALUES ("FINISH");
 
 
 

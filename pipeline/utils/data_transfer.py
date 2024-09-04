@@ -12,6 +12,7 @@ class file_transferer:
         self.dl = data_loader.data_loader()
         self.site_id = self.fs.site_info['process_site_id']
         self.pp_this_site = process_pub.process_publisher(site_id = self.site_id, group_id = self.site_id)
+        self.image_type_id = self.sql_interface.image_type_id
     def transfer_file_to_file_system(self,input_path,observation_id,image_info_dict={'image_type':"raw"}):
         '''
         This function is used for debug. Observation is created manually. Input the Observation, and raw data file path so it will transfer it to the right file system. 
@@ -30,7 +31,7 @@ class file_transferer:
         batch_size = result['batch_size']
         #3 steps: register; create dir; mv
         PID_list = []
-        image_type_id = self.sql_interface.image_type_id[image_info_dict['image_type']]
+        image_type_id = self.image_type_id[image_info_dict['image_type']]
         for i,fp in enumerate(file_paths):
             batch_number = i//batch_size+1   
             PID = self.pp_this_site.register_info({"cmd":"INSERT INTO img (store_site_id,batch,image_type_id,obs_id,img_name) VALUES (%s,%s,%s,%s,%s);","args":[self.site_id,batch_number,image_type_id,observation_id,fp.split('/')[-1]]})
@@ -51,12 +52,13 @@ class file_transferer:
             success = self.fs.create_dir_for_object('img',{'birth_pid':PID})
 
             os.system(f"mv {fp} {obs_folder_path}/{file_name}")
+        self.pp_this_site.load_UTC(PID_list)
         mycursor = self.sql_interface.cnx.cursor()
         sql = 'UPDATE observation SET n_pic=%s where obs_id=%s;'
         args = (len(file_paths),observation_id)
         mycursor.execute(sql,args)
         self.sql_interface.cnx.commit()
-        self.pp_this_site.load_UTC(PID_list)
+
 
 
             
