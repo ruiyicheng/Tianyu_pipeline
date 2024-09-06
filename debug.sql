@@ -11,7 +11,9 @@ select * from target_n;
 select * from observation LEFT JOIN target_n on observation.target_id=target_n.target_id;
 #select * from obs_site;
 #select * from observer;
-SELECT * FROM process_list;
+DELETE FROM process_list where not process_status_id =5;
+#Error Code: 1451. Cannot delete or update a parent row: a foreign key constraint fails (`tianyudev`.`process_dependence`, CONSTRAINT `process_dependence_ibfk_1` FOREIGN KEY (`master_process_id`) REFERENCES `process_list` (`process_id`))
+
 SELECT * FROM data_process_site;
 SELECT * FROM data_process_group;
 
@@ -25,12 +27,13 @@ SELECT * FROM image_type;
 #DELETE FROM observation where instrument_id=1;
 SELECT * FROM process_list where not process_status_id=5 ORDER BY process_id;
 SELECT * FROM process_dependence;
-DELETE FROM process_dependence where master_process_id>=172536414298306415401380 or dependence_process_id>=172536414298306415401380;
-DELETE FROM process_list where process_id>=172536414298306415401380;
-DELETE FROM process_list where process_id=172355258233725582503290;
+DELETE FROM process_dependence where master_process_id>=172545361530637366639461 or dependence_process_id>=172545361530637366639461;
+DELETE FROM process_list where process_id>=172545361530637366639461;
+DELETE FROM process_list where process_id=172545239820846584000425;
 
 UPDATE process_list SET process_status_id = 1 where process_id=172536517560333557525176;
-SELECT * from img;
+SELECT * from img where image_type_id=2;
+DELETE FROM img where image_type_id=2;
 #SHOW TABLES;
 #DROP TABLE process;
 SELECT * FROM data_process_site;
@@ -38,4 +41,5 @@ SELECT * from observation;
 SELECT * from img where dark_image_id=dark_image_id;
 DELETE FROM img where image_id=1451;
 SELECT * FROM process_type;
+SELECT * FROM img where n_star_resolved=n_star_resolved;
 SELECT tsp.x_template as x_template, tsp.y_template as y_template FROM img INNER JOIN tianyu_source_position as tsp on img.image_id = tsp.template_image_id WHERE img.birth_process_id = 172360570755623226984087;

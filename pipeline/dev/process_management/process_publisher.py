@@ -30,9 +30,9 @@ class process_publisher:
     #     self.generate_template(pid_cal_list,sky_id)
 
         
-    def reduction_nighty_obs(self,calibrated_birth_PID_list,sky_id,template_birth_PID = -1):
+    def align_stack_img(self,calibrated_birth_PID_list,template_birth_PID = -1):
         if template_birth_PID==-1:
-            template_birth_PID = calibrated_birth_PID_list[0]
+            template_birth_PID = min(calibrated_birth_PID_list)
         align_pid_list = []
         for calibrated_birth_PID in calibrated_birth_PID_list:
             align_pid_list.append(self.align(template_birth_PID,calibrated_birth_PID))
@@ -45,10 +45,10 @@ class process_publisher:
         # select the img to stack 
         # stacking new template
         stack_template_pid = self.stacking_chosen(pid_select)
-
+        return stack_template_pid
         # syncronize the position of star       
         # crossmatch the new resolved star and origin star
-        resolve_star_pid = self.detect_source(stack_template_pid,sky_pid,as_new_template = True)
+        #resolve_star_pid = self.detect_source(stack_template_pid,sky_pid,as_new_template = True)
 
         # add new source into sky
         # self.crossmatch_new_star(resolve_star_pid)
@@ -174,11 +174,13 @@ class process_publisher:
             consume_site_id=self.default_site_id
         if consume_group_id==-1:
             consume_group_id=self.default_group_id  
-        PID_this = self.publish_CMD(consume_site_id,consume_group_id,'stack_chosen',[PID_choose])
+        PID_align_list = self.sql_interface.get_process_dependence(PID_choose)
+        PID_this = self.stacking(PID_align_list, PID_type='align',consume_site_id=consume_site_id,consume_group_id=consume_group_id,consider_goodness=1 )
+
         return PID_this
 
 
-    def stacking(self,PIDs,PID_type='birth',num_image_limit = 5,consume_site_id=-1,consume_group_id=-1):
+    def stacking(self,PIDs,PID_type='birth',num_image_limit = 5,consume_site_id=-1,consume_group_id=-1,consider_goodness=0):
         if consume_site_id==-1:
             consume_site_id=self.default_site_id
         if consume_group_id==-1:
@@ -187,13 +189,13 @@ class process_publisher:
         for i in range((len(PIDs)-1)//num_image_limit+1):
             stack_this = PIDs[i*num_image_limit:(i+1)*num_image_limit]
             if len(stack_this)!=1:
-                PID_this = self.publish_CMD(consume_site_id,consume_group_id,'stack|{"PID_type":"'+PID_type+'"}',stack_this)
+                PID_this = self.publish_CMD(consume_site_id,consume_group_id,'stack|{"PID_type":"'+PID_type+'","consider_goodness":'+str(consider_goodness)+'}',stack_this)
                 Next_hierarchy_PID_list.append(PID_this)
             else:
                 Next_hierarchy_PID_list.append(stack_this[0])
 
         if len(Next_hierarchy_PID_list)>1:
-            PID_ret = self.stacking(Next_hierarchy_PID_list,num_image_limit=num_image_limit,consume_site_id=consume_site_id,consume_group_id=consume_group_id)
+            PID_ret = self.stacking(Next_hierarchy_PID_list,num_image_limit=num_image_limit,consume_site_id=consume_site_id,consume_group_id=consume_group_id,consider_goodness=consider_goodness)
         else:
             return PID_this
         return PID_ret

@@ -185,6 +185,8 @@ CREATE TABLE img(
     INDEX(jd_utc_mid)
 );
 
+ALTER TABLE img ADD column bgk_rms DOUBLE DEFAULT NULL;
+ALTER TABLE img ADD column coadd_weight DOUBLE DEFAULT NULL;
 #SHOW COLUMNS from img;
 #ALTER TABLE img DROP column img_path;
 #ALTER TABLE img ADD column img_name TEXT;

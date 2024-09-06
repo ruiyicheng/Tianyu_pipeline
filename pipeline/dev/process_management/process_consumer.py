@@ -68,7 +68,11 @@ class process_consumer:
                 PID_type = "birth"
             else:
                 PID_type = par['PID_type']
-            success = self.image_processor.stacking(PID,self.site_id,PID_type = PID_type,par = par)
+            if not "consider_goodness" in par:
+                consider_goodness = 0
+            else:
+                consider_goodness = par['consider_goodness']
+            success = self.image_processor.stacking(PID,self.site_id,PID_type = PID_type,par = par,consider_goodness = consider_goodness)
         if cmd == 'init_dir':
             pass
         if cmd == 'register':
