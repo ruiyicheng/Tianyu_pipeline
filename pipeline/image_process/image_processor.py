@@ -84,7 +84,7 @@ class image_processor:
         # 1 template_img not resolved, need to resolve the target in template_img
         # 2 template_img resolved, need to get star position from db
         
-        sql = "SELECT tsp.x_template as x_template, tsp.y_template as y_template FROM img INNER JOIN tianyu_source_position as tsp on img.image_id = tsp.image_id WHERE img.birth_process_id = %s"
+        sql = "SELECT tsp.x_template as x_template, tsp.y_template as y_template FROM img INNER JOIN tianyu_source_position as tsp on img.image_id = tsp.template_img_id WHERE img.birth_process_id = %s"
         args = (template_img_pid,)
         result = self.sql_interface.query(sql,args)
         if len(result)>=10:# resolved template image
