@@ -7,6 +7,7 @@ from tqdm import tqdm
 import time
 import sep
 import Tianyu_pipeline.pipeline.utils.sql_interface as sql_interface
+import Tianyu_pipeline.pipeline.utils.data_loader as data_loader
 import Tianyu_pipeline.pipeline.dev.file_system.file_system as fs
 import Tianyu_pipeline.pipeline.dev.process_management.process_publisher as process_pub 
 import Tianyu_pipeline.pipeline.utils.process_site_getter as psg
@@ -19,7 +20,7 @@ class image_processor:
         #     site_id = self.site_info['site_id']
         # if group_id==-1:
         #     group_id = site_id
-
+        #self.dl = data_loader.data_loader()
         self.fs = fs.file_system()
         self.sql_interface = sql_interface.sql_interface()
         #self.pp_this_site = process_pub.process_publisher(site_id = site_id, group_id = group_id)
@@ -79,7 +80,7 @@ class image_processor:
     
 
 
-    def alignment(self,PID,template_img_pid,target_img_pid,max_deviation = 400,resolve_sigma = 5,minarea = 15,test = False):
+    def alignment(self,PID,template_img_pid,target_img_pid,max_deviation = 400,resolve_sigma = 50,minarea = 15,test = False):
         # Align 2 image! 2 possibility
         # 1 template_img not resolved, need to resolve the target in template_img
         # 2 template_img resolved, need to get star position from db
@@ -96,9 +97,32 @@ class image_processor:
             img_folder,img_name = self.fs.get_dir_for_object("img",{"birth_pid":template_img_pid})
             img_path = f"{img_folder}/{img_name}"
             img_data = fits.getdata(img_path).byteswap().newbyteorder()
-            objects = sep.extract(img_data,resolve_sigma,minarea=minarea)
-            print(objects)
-            if len(objects)<3:
+            objects = sep.extract(img_data*10000,resolve_sigma,minarea=minarea)
+            if False:#Used for debug, show the sep resolve results
+                from matplotlib.patches import Ellipse
+                import matplotlib.pyplot as plt
+                # plot background-subtracted image
+                fig, ax = plt.subplots()
+                m, s = np.mean(img_data), np.std(img_data)
+                im = ax.imshow(img_data, interpolation='nearest', cmap='gray',
+                            vmin=m-s, vmax=m+s, origin='lower')
+
+                # plot an ellipse for each object
+                for i in range(len(objects)):
+                    e = Ellipse(xy=(objects['x'][i], objects['y'][i]),
+                                width=6*objects['a'][i],
+                                height=6*objects['b'][i],
+                                angle=objects['theta'][i] * 180. / np.pi)
+                    e.set_facecolor('none')
+                    e.set_edgecolor('red')
+                    ax.add_artist(e)
+                plt.show()
+
+
+            
+            #print(objects)
+            #print(len(objects['x']))
+            if len(objects['x'])<3:
                 print('Too few star resolved in template image')
                 return 0
             x_stars_template = objects['x']
@@ -116,9 +140,10 @@ class image_processor:
         # res_list = []
         #for target_img_pid in target_img_pid_list:
         img_folder,img_name = self.fs.get_dir_for_object("img",{"birth_pid":target_img_pid})
+        img_path = f'{img_folder}/{img_name}'
         img_data = fits.getdata(img_path).byteswap().newbyteorder()
-        objects = sep.extract(img_data,resolve_sigma,minarea=minarea)
-        if len(objects)<3:
+        objects = sep.extract(img_data*10000,resolve_sigma,minarea=minarea)
+        if len(objects['x'])<3:
             print('Too few star resolved in target image')
             return 0
 
@@ -136,7 +161,11 @@ class image_processor:
 
         dx = (x_stars_template.reshape(-1,1)-x_stars_this.reshape(1,-1)).reshape(-1,1)
         dy = (y_stars_template.reshape(-1,1)-y_stars_this.reshape(1,-1)).reshape(-1,1)
+        if False:
+            import matplotlib.pyplot as plt
 
+            plt.hist(np.squeeze(x_stars_template-x_stars_this))
+            plt.show()
         xhist,xbins = np.histogram(dx,range=[-max_deviation,max_deviation],bins=2*max_deviation+1)
         yhist,ybins = np.histogram(dy,range=[-max_deviation,max_deviation],bins=2*max_deviation+1)
 
@@ -151,7 +180,7 @@ class image_processor:
             mycursor = self.sql_interface.cnx.cursor()
             sql = "UPDATE img SET img.x_to_template = %s, img.y_to_template = %s, img.align_process_id = %s, img.align_target_image_id = %s, img.n_star_resolved = %s where img.birth_process_id = %s;"
             mycursor.execute(sql,arg)
-            self.dl.cnx.commit()
+            self.sql_interface.cnx.commit()
         return 1
     
     def stacking(self,PID,site_id,method = "mean",PID_type = "birth",ret='success',par = {},consider_goodness = 0):
