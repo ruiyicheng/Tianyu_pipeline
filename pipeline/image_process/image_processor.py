@@ -97,6 +97,7 @@ class image_processor:
             img_path = f"{img_folder}/{img_name}"
             img_data = fits.getdata(img_path).byteswap().newbyteorder()
             objects = sep.extract(img_data,resolve_sigma,minarea=minarea)
+            print(objects)
             if len(objects)<3:
                 print('Too few star resolved in template image')
                 return 0
