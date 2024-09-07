@@ -79,7 +79,7 @@ class image_processor:
     
 
 
-    def alignment(self,PID,template_img_pid,target_img_pid,max_deviation = 400,resolve_sigma = 50,minarea = 30,test = False):
+    def alignment(self,PID,template_img_pid,target_img_pid,max_deviation = 400,resolve_sigma = 5,minarea = 15,test = False):
         # Align 2 image! 2 possibility
         # 1 template_img not resolved, need to resolve the target in template_img
         # 2 template_img resolved, need to get star position from db
