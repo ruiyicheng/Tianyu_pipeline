@@ -6,6 +6,7 @@ import glob
 from tqdm import tqdm
 import time
 import sep
+from astropy.stats import sigma_clip 
 import Tianyu_pipeline.pipeline.utils.sql_interface as sql_interface
 import Tianyu_pipeline.pipeline.utils.data_loader as data_loader
 import Tianyu_pipeline.pipeline.dev.file_system.file_system as fs
@@ -70,17 +71,18 @@ class image_processor:
         for PID_stacke_this in PID_stacker:
             # if PID_type=="birth":
             if process_type == "birth":
-                sql = "SELECT * FROM img where img.birth_process_id = %s;"
+                sql = "SELECT * FROM img where img.birth_process_id = %s and deleted = 0;"
             if process_type == "align":
-                sql = "SELECT * FROM img where img.align_process_id = %s;"
+                sql = "SELECT * FROM img where img.align_process_id = %s and deleted = 0;"
             args = (PID_stacke_this,)
-            result = self.sql_interface.query(sql,args).to_dict("records")
-            res_query.extend(result)
+            result = self.sql_interface.query(sql,args)
+            if len(result)>0:
+                res_query.extend(result.to_dict("records"))
         return res_query
     
 
 
-    def alignment(self,PID,template_img_pid,target_img_pid,max_deviation = 400,resolve_sigma = 50,minarea = 15,test = False):
+    def alignment(self,PID,template_img_pid,target_img_pid,max_deviation = 400,resolve_sigma = 15,minarea = 15,test = False):
         # Align 2 image! 2 possibility
         # 1 template_img not resolved, need to resolve the target in template_img
         # 2 template_img resolved, need to get star position from db
@@ -97,7 +99,9 @@ class image_processor:
             img_folder,img_name = self.fs.get_dir_for_object("img",{"birth_pid":template_img_pid})
             img_path = f"{img_folder}/{img_name}"
             img_data = fits.getdata(img_path).byteswap().newbyteorder()
-            objects = sep.extract(img_data*10000,resolve_sigma,minarea=minarea)
+            #img_bkg_rms = fits.getdata(img_path).byteswap().newbyteorder()
+            bkg = sep.Background(img_data)
+            objects = sep.extract(img_data-bkg,resolve_sigma,err=bkg.rms(),minarea=minarea)
             if False:#Used for debug, show the sep resolve results
                 from matplotlib.patches import Ellipse
                 import matplotlib.pyplot as plt
@@ -142,10 +146,26 @@ class image_processor:
         img_folder,img_name = self.fs.get_dir_for_object("img",{"birth_pid":target_img_pid})
         img_path = f'{img_folder}/{img_name}'
         img_data = fits.getdata(img_path).byteswap().newbyteorder()
-        objects = sep.extract(img_data*10000,resolve_sigma,minarea=minarea)
+        bkg = sep.Background(img_data)
+        objects = sep.extract(img_data-bkg,resolve_sigma,err=bkg.rms(),minarea=minarea)
+        try:
+            objects = sep.extract(img_data,resolve_sigma,minarea=minarea)
+
         if len(objects['x'])<3:
-            print('Too few star resolved in target image')
-            return 0
+            print("Failed to extract stars in target image, marking img")
+            arg = (template_img_pid,)
+            mycursor = self.sql_interface.cnx.cursor()
+            sql = "UPDATE img SET img.deleted = 1 WHERE img.birth_process_id = %s;"
+            # 删除文件系统中的图像
+            # try:
+            #     os.remove(img_path)
+            #     print(f"success to delete: {img_path}")
+            # except OSError as e:
+            #     print(f"failed to delete: {e}")
+
+            mycursor.execute(sql,arg)
+            self.sql_interface.cnx.commit()
+            return 1
 
         # fits_data = self.se.use(res[1],keep_out = False,use_sep = True)
         #fits_res = fits.open(res_output)
@@ -289,7 +309,32 @@ class image_processor:
             return 1
         if ret=="new_id":
             return new_img_id
-    
+    def select_good_img(self,PID):
+        res_query = self.get_dep_img(PID,process_type=PID_type)
+        weight_result = []
+        PIDs = []
+        n_stars = []
+        bkg_rms_list = []
+        for single_img in res_query:
+            PIDs.append(single_img['birth_process_id'])
+            n_stars.append(single_img['n_star_resolved'])
+            bkg_rms_list.append(single_img['bkg_rms'])
+        # Eliminate the images with cloud or tracking issue
+        mask_star = sigma_clip(np.array(n_stars),sigma=3).mask
+        # Eliminate the images with aeroplane or other issues
+        mask_bkg = sigma_clip(np.array(bkg_rms_list),sigma_lower = 100,sigma_upper = 2).mask
+        mask_result = mask_star & mask_bkg
+        for i in range(len(PIDs)):
+        
+            PID_this,mask_this = PIDs[i],mask_result[i]
+            mycursor = self.sql_interface.cnx.cursor()
+            sql = "UPDATE img SET img.coadd_weight = %s WHERE img.birth_process_id = %s;"
+            arg = (1 if mask_this else 0,PID_this)
+            mycursor.execute(sql,arg)
+            self.sql_interface.cnx.commit()
+        return 1
+        
+        
     def calibration(self,process_PID,site_id,cal_img_pid, sub_img_pid = -1, div_img_pid = -1,subtract_bkg = True,debug = True):#,obs_id=1,hierarchy=2,img_type = "flat_raw",consider_flat = True,consider_bias = True,bias_id = 2,bias_hierarchy = 2,flat_id = 1,flat_hierarchy = 2,keep_origin = True,outpath="samedir",debug = False):
         # img_2_cal = self.get_dep_img(process_PID)
         # # mycursor = self.sql_interface.cnx.cursor()
@@ -371,6 +416,16 @@ class image_processor:
             #calibrated_image = calibrated_image.byteswap().newbyteorder()
             bkg = sep.Background(calibrated_image.astype("float32"))
             calibrated_image = calibrated_image-bkg
+            bkg_rms = bkg.globalrms
+            # 将背景噪声 RMS 值记录到数据库中
+            sql = "UPDATE img SET bkg_rms = %s WHERE image_id = %s"
+            args = (float(bkg_rms), new_img_id)
+            mycursor = self.sql_interface.cnx.cursor()
+            mycursor.execute(sql, args)
+            self.sql_interface.cnx.commit()
+            print(f"bkg RMS = {bkg_rms} recorded at image_id: {new_img_id}")
+            #fits.writeto(f"{save_image_path}/{save_image_name.strip('.fits').strip('.fit')+"_bkgrms.fits"}",bkg_rms.astype('float32'),header = calibrated_image_header,overwrite=True)
+
         
         fits.writeto(f"{save_image_path}/{save_image_name}",calibrated_image.astype('float32'),header = calibrated_image_header,overwrite=True)
 

@@ -27,9 +27,9 @@ SELECT * FROM image_type;
 #DELETE FROM observation where instrument_id=1;
 SELECT * FROM process_list where not process_status_id=5 ORDER BY process_id;
 SELECT * FROM process_dependence;
-DELETE FROM process_dependence where master_process_id>=172545361530637366639461 or dependence_process_id>=172545361530637366639461;
-DELETE FROM process_list where process_id>=172545361530637366639461;
-DELETE FROM process_list where process_id=172545239820846584000425;
+DELETE FROM process_dependence where master_process_id>=172567522748834927793656 or dependence_process_id>=172567522748834927793656;
+DELETE FROM process_list where process_id>=172567522748834927793656;
+DELETE FROM process_list where process_id=172567522748834927793656;
 
 UPDATE process_list SET process_status_id = 1 where process_id=172536517560333557525176;
 SELECT * from img where image_type_id=2;

@@ -175,12 +175,12 @@ class process_publisher:
         if consume_group_id==-1:
             consume_group_id=self.default_group_id  
         PID_align_list = self.sql_interface.get_process_dependence(PID_choose)
-        PID_this = self.stacking(PID_align_list, PID_type='align',consume_site_id=consume_site_id,consume_group_id=consume_group_id,consider_goodness=1 )
+        PID_this = self.stacking(PID_align_list, PID_type='align',consume_site_id=consume_site_id,consume_group_id=consume_group_id,consider_goodness=1,additional_dependence_list = [PID_choose] )
 
         return PID_this
 
 
-    def stacking(self,PIDs,PID_type='birth',num_image_limit = 5,consume_site_id=-1,consume_group_id=-1,consider_goodness=0):
+    def stacking(self,PIDs,PID_type='birth',num_image_limit = 5,consume_site_id=-1,consume_group_id=-1,consider_goodness=0,additional_dependence_list = []):
         if consume_site_id==-1:
             consume_site_id=self.default_site_id
         if consume_group_id==-1:
@@ -189,7 +189,7 @@ class process_publisher:
         for i in range((len(PIDs)-1)//num_image_limit+1):
             stack_this = PIDs[i*num_image_limit:(i+1)*num_image_limit]
             if len(stack_this)!=1:
-                PID_this = self.publish_CMD(consume_site_id,consume_group_id,'stack|{"PID_type":"'+PID_type+'","consider_goodness":'+str(consider_goodness)+'}',stack_this)
+                PID_this = self.publish_CMD(consume_site_id,consume_group_id,'stack|{"PID_type":"'+PID_type+'","consider_goodness":'+str(consider_goodness)+'}',stack_this+additional_dependence_list)
                 Next_hierarchy_PID_list.append(PID_this)
             else:
                 Next_hierarchy_PID_list.append(stack_this[0])
