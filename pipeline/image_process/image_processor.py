@@ -148,8 +148,6 @@ class image_processor:
         img_data = fits.getdata(img_path).byteswap().newbyteorder()
         bkg = sep.Background(img_data)
         objects = sep.extract(img_data-bkg,resolve_sigma,err=bkg.rms(),minarea=minarea)
-        try:
-            objects = sep.extract(img_data,resolve_sigma,minarea=minarea)
 
         if len(objects['x'])<3:
             print("Failed to extract stars in target image, marking img")
