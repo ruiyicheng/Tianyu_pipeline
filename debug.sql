@@ -4,6 +4,9 @@
 #pp_this.register_info({"cmd":"INSERT INTO observation (observation_type_id,target_id,batch_size,instrument_id,obs_site_id,observer_id,bin_size) values (%s,%s,%s,%s,%s,%s,%s)","args":"[1,6,50,1,1,2,1]"})
 #pp_this.register_info({"cmd":"INSERT INTO observation (observation_type_id,target_id,batch_size,instrument_id,obs_site_id,observer_id,bin_size) values (%s,%s,%s,%s,%s,%s,%s)","args":"[1,8,5,1,1,2,1]"})
 #pp_this.register_info({"cmd":"INSERT INTO observation (observation_type_id,target_id,batch_size,instrument_id,obs_site_id,observer_id,bin_size) values (%s,%s,%s,%s,%s,%s,%s)","args":"[1,9,5,1,1,2,1]"})
+#pp_this.register_info({"cmd":"INSERT INTO sky (target_id,ra,`dec`,fov_x,fov_y) values (%s,%s,%s,%s,%s)","args":"[8,305.2218674394,59.44877091036,0.76,0.5]"})
+USE tianyudev;
+SELECT * FROM target_n;
 use tianyudev;
 SELECT * FROM obs_site;
 SELECT * FROM observer;

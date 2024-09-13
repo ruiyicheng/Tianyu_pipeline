@@ -97,8 +97,9 @@ class process_consumer:
             if not "subtract_bkg" in par:
                 par['subtract_bkg'] = 1
             success = self.image_processor.calibration(PID,self.site_id,par['PID_cal'], sub_img_pid = par['PID_sub'], div_img_pid = par['PID_div'],subtract_bkg = par['subtract_bkg'])
-        if cmd == 'image_assess':
-            pass
+        if cmd == 'select_good_img':
+            success = self.image_processor.select_good_img(PID)
+
         if cmd == 'align':
             success = self.image_processor.alignment(PID,par["template_birth_PID"],par["cal_birth_PID"])
         #time.sleep(0.5)
@@ -111,23 +112,24 @@ class process_consumer:
     def callback(self,ch, method, properties, body):
         print(f" [x] Received {body.decode()}, changing db...")
         PID,cmd,par = self.resolve_msg(body.decode())
-        mycursor = self.sql_interface.cnx.cursor()
+        #mycursor = self.sql_interface.cnx.cursor()
         sql = "UPDATE process_list SET process_status_id = 3 WHERE process_id = %s;"
         argsql = (PID,)
-        mycursor.execute(sql,argsql)
-        self.sql_interface.cnx.commit()
-
+        #mycursor.execute(sql,argsql)
+        #self.sql_interface.cnx.commit()
+        self.sql_interface.execute(sql,argsql)
         success = self.work(PID,cmd,par)
         
-        mycursor = self.sql_interface.cnx.cursor()
+        #mycursor = self.sql_interface.cnx.cursor()
         if success:
             suc = 5
         else:
             suc = 4
         sql = "UPDATE process_list SET process_status_id = %s WHERE process_id = %s;"
         argsql = (suc, PID)
-        mycursor.execute(sql,argsql)
-        self.sql_interface.cnx.commit()
+        #mycursor.execute(sql,argsql)
+        #self.sql_interface.cnx.commit()
+        self.sql_interface.execute(sql,argsql)
         print(" [x] Done")
         ch.basic_ack(delivery_tag=method.delivery_tag)
 

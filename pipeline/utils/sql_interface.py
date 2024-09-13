@@ -50,10 +50,21 @@ class sql_interface:
         for row in myresult:
             res_dict[row[index_key]] = row[index_value]
         return res_dict
-    def query(self,sql,args,return_df = True):
+    def execute(self, sql, args, return_last_id=False,db = 'tianyudev'):
+        with mysql.connector.connect(user='tianyu', password='tianyu',
+                            host='192.168.1.107',
+                            database = db) as cnx:
+            with cnx.cursor() as mycursor:
+                mycursor.execute(sql, args)
+                cnx.commit()
+                if return_last_id:
+                    mycursor.execute("SELECT LAST_INSERT_ID()")
+                    last_id = mycursor.fetchone()[0]
+                    return last_id
+    def query(self,sql,args,return_df = True,db = 'tianyudev'):
         self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
                             host='192.168.1.107',
-                            database='tianyudev')
+                            database=db)
         self.cnx.commit()
         mycursor = self.cnx.cursor()
         mycursor.execute(sql,args)

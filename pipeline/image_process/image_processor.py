@@ -12,6 +12,7 @@ import Tianyu_pipeline.pipeline.utils.data_loader as data_loader
 import Tianyu_pipeline.pipeline.dev.file_system.file_system as fs
 import Tianyu_pipeline.pipeline.dev.process_management.process_publisher as process_pub 
 import Tianyu_pipeline.pipeline.utils.process_site_getter as psg
+
 class image_processor:
     def __init__(self,site_id=-1,group_id=-1):
         self.psg = psg.process_site_getter()
@@ -26,8 +27,7 @@ class image_processor:
         self.sql_interface = sql_interface.sql_interface()
         #self.pp_this_site = process_pub.process_publisher(site_id = site_id, group_id = group_id)
 
-    def detect_source(self,img_pid,sky_pid,as_new_template = True):
-        pass
+
     # def generate_template_image(self,site_id,sky_id,obs_id,n_stack=1):
     #     #align stack map to sky
     #     
@@ -64,7 +64,7 @@ class image_processor:
     #     new_sky_id = myresult[0][0] #auto_increment
         
     #     return new_sky_id,outpath
-    
+
     def get_dep_img(self,PID,process_type = "birth"):
         res_query = []
         PID_stacker = self.sql_interface.get_process_dependence(PID)
@@ -79,9 +79,161 @@ class image_processor:
             if len(result)>0:
                 res_query.extend(result.to_dict("records"))
         return res_query
-    
+    def crossmatch_source(self,PID,sky_id,resolve_sigma = 5,minarea = 10,max_distance = 5,max_ratio = 10):
+        pass
+    def flux_extraction(self,PID):
+        pass
+    def detect_source_in_template(self,PID,sky_id,resolve_sigma = 5,minarea = 10,max_distance = 5,max_ratio = 10):
+        # 1. get the template image
+        # 2. get the sources in template image
+        # 3. get the sources in target image
+        # 4. match the sources in template image and target image
+        # 5. update the database
+        # Optional: do similar procedure on differential image
+        def find_nearest_kdtree(x1, y1, x2, y2):
+            # input: x1, y1, x2, y2
+            # output: nearest_indices, distances
+            # x1.shape = y1.shape
+            # x2.shape = y2.shape
+            # output.shape = x1.shape
+            # function: find the nearest point in x2, y2 for each point in x1, y1
+            # used for matching the sources in template image and target image
+            # 构建KDTree
+            from scipy.spatial import cKDTree
+            tree = cKDTree(np.c_[x2, y2])
+            
+            # 查找最近点的索引和距离
+            distances, nearest_indices = tree.query(np.c_[x1, y1], k=1)
+            
+            return nearest_indices, distances
+        img_this = self.get_dep_img(PID)
+        assert len(img_this)==1
+        img_id_this = img_this[0]['image_id']
+        path_first_file,name_first_file = self.fs.get_dir_for_object("img",{"image_id":img_id_this})
+        img_path = f"{path_first_file}/{name_first_file}"
+        img_data = fits.getdata(img_path).byteswap().newbyteorder()
+        bkg = sep.Background(img_data)
+        objects = sep.extract(img_data-bkg,resolve_sigma,err=bkg.rms(),minarea=minarea)
+        # 过滤掉长宽比大于max_ratio的目标
+        objects = objects[objects['a']/objects['b']<max_ratio]
+        # photometry
+        flux, fluxerr, flag = sep.sum_circle(data_sub, objects['x'], objects['y'],
+                                     10.0, err=bkg.globalrms, gain=1.0)
+        # 查询数据库记录, 现版本没管差分图像
+        sql = """
+SELECT 
+    ts.source_id as source_id, 
+    tsp.template_img_id as image_id, 
+    tsp.x_template as x_template, 
+    tsp.y_template as y_template, 
+    sim.absolute_deviation_x as absolute_deviation_x, 
+    sim.absolute_deviation_y as absolute_deviation_y 
+FROM 
+    tianyu_source AS ts 
+INNER JOIN 
+    (SELECT source_id, MAX(template_img_id) as max_template_img_id
+     FROM tianyu_source_position
+     GROUP BY source_id) as max_tsp ON ts.source_id = max_tsp.source_id
+INNER JOIN 
+    tianyu_source_position AS tsp ON ts.source_id = tsp.source_id 
+    AND tsp.template_img_id = max_tsp.max_template_img_id
+INNER JOIN 
+    sky_image_map AS sim ON tsp.template_img_id = sim.image_id 
+WHERE 
+    sim.sky_id = %s 
+ORDER BY 
+    source_id, image_id;
+"""
+        args = (sky_id,)
+        archive_star_result = self.sql_interface.query(sql, args)
+        
+        if len(archive_star_result) == 0:
+            print("no template yet")
+            absolute_deviation_x = 0
+            absolute_deviation_y = 0
+            matched_indices = []
+            x_star_this = objects['x']
+            y_star_this = objects['y']
+            x_star_this_absolute = x_star_this + absolute_deviation_x
+            y_star_this_absolute = y_star_this + absolute_deviation_y
+        else:
+            # 从数据库结果中提取坐标
+            x_template = archive_star_result['x_template'].values
+            y_template = archive_star_result['y_template'].values
+            
+            x_star_this = objects['x']
+            y_star_this = objects['y']
 
+            absolute_deviation_x, absolute_deviation_y = self.get_shift(x_template,y_template,x_star_this,y_star_this)
 
+            x_star_this_absolute = x_star_this + absolute_deviation_x
+            y_star_this_absolute = y_star_this + absolute_deviation_y
+            # 交叉匹配
+            max_distance = max_distance  # 最大匹配距离(像素)
+            matched_indices = []
+            nearest_indices, distances = find_nearest_kdtree(x_star_this_absolute,y_star_this_absolute,x_template,y_star_this)
+
+            for ind_obj,ind_archive, dis in zip(range(len(nearest_indices)),nearest_indices,distances):
+                if dis < max_distance:
+                    matched_indices.append((ind_obj,ind_archive))
+            
+            # 更新数据库
+        for ind_obj,ind_archive in matched_indices:
+            sql = """
+            INSERT INTO tianyu_source_position (source_id, template_img_id, x_template, y_template,flux_template,e_flux_template) 
+            VALUES (%s,%s,%s,%s,%s,%s);
+            """
+            args = (archive_star_result['source_id'][ind_archive], img_id_this,x_star_this_absolute[ind_obj], y_star_this_absolute[ind_obj],flux[ind_obj],fluxerr[ind_obj])
+            self.sql_interface.execute(sql, args)
+        
+        # 插入新检测到的源
+        new_sources = set(range(len(objects))) - set([m[0] for m in matched_indices])
+        for i in new_sources:
+            
+            # 首先插入新源到 tianyu_source 表
+            sql_source = "INSERT INTO tianyu_source (sky_id) VALUES (%s)"
+            args_source = (sky_id,)
+            new_source_id = self.sql_interface.execute(sql_source, args_source, return_last_id=True)
+            
+            # 然后插入新源的位置信息到 tianyu_source_position 表
+            sql_position = "INSERT INTO tianyu_source_position (source_id, template_img_id, x_template, y_template, flux_template, e_flux_template) VALUES (%s, %s, %s, %s, %s, %s)"
+            args_position = (new_source_id, img_id_this, x_star_this_absolute[i], y_star_this_absolute[i], flux[i], fluxerr[i])
+            self.sql_interface.execute(sql_position, args_position)
+            self.sql_interface.execute(sql, args)
+        
+        print(f"crossmatched {len(matched_indices)} sources,  {len(new_sources)} new sources")
+        return 1
+
+    def get_shift(self,x_stars_template,y_stars_template,x_stars_this,y_stars_this,max_deviation = 400):
+        dx = (x_stars_template.reshape(-1,1)-x_stars_this.reshape(1,-1)).reshape(-1,1)
+        dy = (y_stars_template.reshape(-1,1)-y_stars_this.reshape(1,-1)).reshape(-1,1)
+        xhist,xbins = np.histogram(dx,range=[-max_deviation,max_deviation],bins=2*max_deviation+1)
+        yhist,ybins = np.histogram(dy,range=[-max_deviation,max_deviation],bins=2*max_deviation+1)
+
+        idx = np.argmax(xhist)
+        xshift = int((xbins[idx]+xbins[idx+1])/2.0)
+        idx = np.argmax(yhist)
+        yshift = int((ybins[idx]+ybins[idx+1])/2.0)
+        return xshift,yshift
+    def show_source_img(self,img_data,objects):
+        from matplotlib.patches import Ellipse
+        import matplotlib.pyplot as plt
+        # plot background-subtracted image
+        fig, ax = plt.subplots()
+        m, s = np.mean(img_data), np.std(img_data)
+        im = ax.imshow(img_data, interpolation='nearest', cmap='gray',
+                    vmin=m-s, vmax=m+s, origin='lower')
+
+        # plot an ellipse for each object
+        for i in range(len(objects)):
+            e = Ellipse(xy=(objects['x'][i], objects['y'][i]),
+                        width=6*objects['a'][i],
+                        height=6*objects['b'][i],
+                        angle=objects['theta'][i] * 180. / np.pi)
+            e.set_facecolor('none')
+            e.set_edgecolor('red')
+            ax.add_artist(e)
+        plt.show()
     def alignment(self,PID,template_img_pid,target_img_pid,max_deviation = 400,resolve_sigma = 15,minarea = 15,test = False):
         # Align 2 image! 2 possibility
         # 1 template_img not resolved, need to resolve the target in template_img
@@ -103,24 +255,7 @@ class image_processor:
             bkg = sep.Background(img_data)
             objects = sep.extract(img_data-bkg,resolve_sigma,err=bkg.rms(),minarea=minarea)
             if False:#Used for debug, show the sep resolve results
-                from matplotlib.patches import Ellipse
-                import matplotlib.pyplot as plt
-                # plot background-subtracted image
-                fig, ax = plt.subplots()
-                m, s = np.mean(img_data), np.std(img_data)
-                im = ax.imshow(img_data, interpolation='nearest', cmap='gray',
-                            vmin=m-s, vmax=m+s, origin='lower')
-
-                # plot an ellipse for each object
-                for i in range(len(objects)):
-                    e = Ellipse(xy=(objects['x'][i], objects['y'][i]),
-                                width=6*objects['a'][i],
-                                height=6*objects['b'][i],
-                                angle=objects['theta'][i] * 180. / np.pi)
-                    e.set_facecolor('none')
-                    e.set_edgecolor('red')
-                    ax.add_artist(e)
-                plt.show()
+                self.show_source_img(img_data,objects)
 
 
             
@@ -152,7 +287,7 @@ class image_processor:
         if len(objects['x'])<3:
             print("Failed to extract stars in target image, marking img")
             arg = (template_img_pid,)
-            mycursor = self.sql_interface.cnx.cursor()
+            #mycursor = self.sql_interface.cnx.cursor()
             sql = "UPDATE img SET img.deleted = 1 WHERE img.birth_process_id = %s;"
             # 删除文件系统中的图像
             # try:
@@ -161,44 +296,25 @@ class image_processor:
             # except OSError as e:
             #     print(f"failed to delete: {e}")
 
-            mycursor.execute(sql,arg)
-            self.sql_interface.cnx.commit()
+            #mycursor.execute(sql,arg)
+            #self.sql_interface.cnx.commit()
+            self.sql_interface.execute(sql,arg)
             return 1
 
-        # fits_data = self.se.use(res[1],keep_out = False,use_sep = True)
-        #fits_res = fits.open(res_output)
-        #os.system("rm "+res_output)
+
         x_stars_this = np.squeeze(objects['x'])
         y_stars_this = np.squeeze(objects['y'])
-        # xx_stars = np.squeeze(fits_data['x2']).reshape(-1,1)
-        # yy_stars = np.squeeze(fits_data['y2']).reshape(-1,1)
-        # xy_stars = np.squeeze(fits_data['xy']).reshape(-1,1)
-        # lambda1 = ((xx_stars+yy_stars)/2+np.sqrt(((xx_stars-yy_stars)/2)**2+xy_stars**2)).reshape(-1,1)
-        # lambda2 = ((xx_stars+yy_stars)/2-np.sqrt(((xx_stars-yy_stars)/2)**2+xy_stars**2)).reshape(-1,1)
-        # print(np.sum((lambda1/lambda2)<1.2)/len(lambda1),np.mean(lambda1/lambda2),np.median(lambda1/lambda2),np.min(lambda1/lambda2))
 
-        dx = (x_stars_template.reshape(-1,1)-x_stars_this.reshape(1,-1)).reshape(-1,1)
-        dy = (y_stars_template.reshape(-1,1)-y_stars_this.reshape(1,-1)).reshape(-1,1)
-        if False:
-            import matplotlib.pyplot as plt
-
-            plt.hist(np.squeeze(x_stars_template-x_stars_this))
-            plt.show()
-        xhist,xbins = np.histogram(dx,range=[-max_deviation,max_deviation],bins=2*max_deviation+1)
-        yhist,ybins = np.histogram(dy,range=[-max_deviation,max_deviation],bins=2*max_deviation+1)
-
-        idx = np.argmax(xhist)
-        xshift = int((xbins[idx]+xbins[idx+1])/2.0)
-        idx = np.argmax(yhist)
-        yshift = int((ybins[idx]+ybins[idx+1])/2.0)
+        xshift,yshift = self.get_shift(x_stars_template,y_stars_template,x_stars_this,y_stars_this,max_deviation = max_deviation)
         #res_list.append([res[2],xshift,yshift,np.sum((lambda1/lambda2)<good_star_threshold)/len(lambda1),len(lambda2)])
         print("Alignment result:",xshift,yshift)
         if not test:
             arg = (xshift,yshift,PID,template_img_id,len(objects),target_img_pid)
-            mycursor = self.sql_interface.cnx.cursor()
+            #mycursor = self.sql_interface.cnx.cursor()
             sql = "UPDATE img SET img.x_to_template = %s, img.y_to_template = %s, img.align_process_id = %s, img.align_target_image_id = %s, img.n_star_resolved = %s where img.birth_process_id = %s;"
-            mycursor.execute(sql,arg)
-            self.sql_interface.cnx.commit()
+            #mycursor.execute(sql,arg)
+            #self.sql_interface.cnx.commit()
+            self.sql_interface.execute(sql,arg)
         return 1
     
     def stacking(self,PID,site_id,method = "mean",PID_type = "birth",ret='success',par = {},consider_goodness = 0):
@@ -287,14 +403,14 @@ class image_processor:
         else:
             args = (np.min(jd_start_list),np.mean(jd_mid_list),np.max(jd_end_list),int(np.sum(n_stack_list)),1,img_type_id,res_query[0]['flat_image_id'],res_query[0]['dark_image_id'],0,0,res_query[0]['obs_id'],new_name,0,res_query[0]['align_target_image_id'],res_query[0]['batch'],site_id,PID,np.sum(goodness_list))
             sql = "INSERT INTO img (jd_utc_start,jd_utc_mid,jd_utc_end,n_stack,processed,image_type_id,flat_image_id,dark_image_id,x_to_template,y_to_template,obs_id,img_name,deleted,align_target_image_id,batch,store_site_id,birth_process_id,coadd_weight) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
-        mycursor = self.sql_interface.cnx.cursor()
-        mycursor.execute(sql,args)
-        self.sql_interface.cnx.commit()
-
-        mycursor = self.sql_interface.cnx.cursor()
-        mycursor.execute("SELECT LAST_INSERT_ID();")
-        myresult = mycursor.fetchall()
-        new_img_id = myresult[0][0] #auto_increment
+        #mycursor = self.sql_interface.cnx.cursor()
+        #mycursor.execute(sql,args)
+        #self.sql_interface.cnx.commit()
+        new_img_id = self.sql_interface.execute(sql,args,return_last_id=True)
+        #mycursor = self.sql_interface.cnx.cursor()
+        #mycursor.execute("SELECT LAST_INSERT_ID();")
+        # myresult = mycursor.fetchall()
+        # new_img_id = myresult[0][0] #auto_increment
         path_first_file,name_first_file = self.fs.get_dir_for_object("img",{"image_id":new_img_id})
         fits.writeto(f"{path_first_file}/{name_first_file}",res,header = header0,overwrite=True)
         print("recording stacking")
@@ -396,17 +512,18 @@ class image_processor:
         if div_img_pid>0:
             calibrated_image = calibrated_image/div_img
         args = (img_target['jd_utc_start'],img_target['jd_utc_mid'],img_target['jd_utc_end'],img_target['n_stack'],1,img_type_id_this,div_img_id,sub_img_id,0,0,img_target['obs_id'],new_target_image_name,0,None,img_target['batch'],site_id,process_PID)
-        mycursor = self.sql_interface.cnx.cursor()
+        #mycursor = self.sql_interface.cnx.cursor()
         sql = "INSERT INTO img (jd_utc_start,jd_utc_mid,jd_utc_end,n_stack,processed,image_type_id,flat_image_id,dark_image_id,x_to_template,y_to_template,obs_id,img_name,deleted,align_target_image_id,batch,store_site_id,birth_process_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
-        mycursor.execute(sql,args)
-        self.sql_interface.cnx.commit()
+        #mycursor.execute(sql,args)
+        #self.sql_interface.cnx.commit()
+        new_img_id = self.sql_interface.execute(sql,args,return_last_id=True)
 
 
 
-        mycursor = self.sql_interface.cnx.cursor()
-        mycursor.execute("SELECT LAST_INSERT_ID();")
-        myresult = mycursor.fetchall()
-        new_img_id = myresult[0][0] #auto_increment
+        # mycursor = self.sql_interface.cnx.cursor()
+        # mycursor.execute("SELECT LAST_INSERT_ID();")
+        # myresult = mycursor.fetchall()
+        # new_img_id = myresult[0][0] #auto_increment
         save_image_path,save_image_name = self.fs.get_dir_for_object("img",{"image_id":new_img_id})
         success = self.fs.create_dir_for_object("img",{"image_id":new_img_id})
         if subtract_bkg:
