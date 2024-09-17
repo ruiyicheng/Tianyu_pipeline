@@ -81,8 +81,7 @@ class image_processor:
         return res_query
     def crossmatch_source(self,PID,sky_id,resolve_sigma = 5,minarea = 10,max_distance = 5,max_ratio = 10):
         pass
-    def flux_extraction(self,PID):
-        pass
+
     def detect_source_in_template(self,PID,sky_id,resolve_sigma = 5,minarea = 10,max_distance = 5,max_ratio = 10):
         # 1. get the template image
         # 2. get the sources in template image

@@ -61,16 +61,16 @@ class process_publisher:
         return PID_this
 
 
-    def detect_source(self, new_template_PID, sky_pid, as_new_template = False):
+    def detect_source(self, new_template_PID, sky_id, as_new_template = False):
         """
         交叉匹配新解析的恒星和原始恒星
         """
         param_dict = {
             'new_template_PID': new_template_PID,
-            'sky_id': sky_pid,
+            'sky_id': sky_id,
             'as_new_template': as_new_template
         }
-        return self.publish_CMD(self.default_site_id, self.default_group_id, f'detect_source|{param_dict}', [new_template_PID, sky_pid])
+        return self.publish_CMD(self.default_site_id, self.default_group_id, f'detect_source|{param_dict}', [new_template_PI])
 
     def calibrate_observation(self,obs_id,PID_sub,PID_div):
         sql = 'SELECT birth_process_id FROM img WHERE obs_id = %s and n_stack=1;'
