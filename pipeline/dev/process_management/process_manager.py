@@ -75,16 +75,18 @@ class process_manager:
     def spin(self):
         while 1:
             df_p = self.scan_waiting_process()
-            df_p['process_id'] = df_p['process_id'].apply(int)
+            #df_p['process_id'] = df_p['process_id'].apply(int)
             print(len(df_p),'unfinished process detected')
-
+            #print(df_p)
             for i,r in df_p.iterrows():
+                #print(r)
                 sql = "SELECT * FROM process_list where process_id in (SELECT dependence_process_id from process_list as p JOIN process_dependence AS pd ON pd.master_process_id = p.process_id where pd.master_process_id = %s) and process_status_id!=5;"
                 argsql = (r['process_id'],)
                 res = self.queue_db(sql,argsql)
                 #print(res)
                 if len(res)==0:# all dependences are satisfied
                     self.submit_mission(r['process_site_id'],r['process_group_id'],r['process_id'],r['process_cmd'])
+                    print("Published",r['process_cmd'])
             time.sleep(0.5)
             self.cnx.commit()
 

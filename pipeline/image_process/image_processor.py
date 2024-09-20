@@ -68,6 +68,7 @@ class image_processor:
     def get_dep_img(self,PID,process_type = "birth"):
         res_query = []
         PID_stacker = self.sql_interface.get_process_dependence(PID)
+        print(PID_stacker)
         for PID_stacke_this in PID_stacker:
             # if PID_type=="birth":
             if process_type == "birth":
@@ -77,6 +78,7 @@ class image_processor:
             args = (PID_stacke_this,)
             result = self.sql_interface.query(sql,args)
             if len(result)>0:
+                #print(result)
                 res_query.extend(result.to_dict("records"))
         return res_query
     def crossmatch_source(self,PID,sky_id,resolve_sigma = 5,minarea = 10,max_distance = 5,max_ratio = 10):
@@ -233,7 +235,7 @@ ORDER BY
             e.set_edgecolor('red')
             ax.add_artist(e)
         plt.show()
-    def alignment(self,PID,template_img_pid,target_img_pid,max_deviation = 400,resolve_sigma = 15,minarea = 15,test = False):
+    def alignment(self,PID,template_img_pid,target_img_pid,max_deviation = 400,resolve_sigma = 5,minarea = 25,test = False):
         # Align 2 image! 2 possibility
         # 1 template_img not resolved, need to resolve the target in template_img
         # 2 template_img resolved, need to get star position from db
@@ -281,8 +283,18 @@ ORDER BY
         img_path = f'{img_folder}/{img_name}'
         img_data = fits.getdata(img_path).byteswap().newbyteorder()
         bkg = sep.Background(img_data)
-        objects = sep.extract(img_data-bkg,resolve_sigma,err=bkg.rms(),minarea=minarea)
+        #bkg_rms_this = bkg.globalrms
+        try:
+            objects = sep.extract(img_data-bkg,resolve_sigma,err=bkg.rms(),minarea=minarea)
+            x_stars_this = np.squeeze(objects['x'])
+            y_stars_this = np.squeeze(objects['y'])
 
+            xshift,yshift = self.get_shift(x_stars_template,y_stars_template,x_stars_this,y_stars_this,max_deviation = max_deviation)
+            n_star_this = len(objects)
+        except:
+            xshift,yshift = 0,0
+            n_star_this = 0
+            bkg_rms_this = 10000000
         if len(objects['x'])<3:
             print("Failed to extract stars in target image, marking img")
             arg = (template_img_pid,)
@@ -301,130 +313,138 @@ ORDER BY
             return 1
 
 
-        x_stars_this = np.squeeze(objects['x'])
-        y_stars_this = np.squeeze(objects['y'])
 
-        xshift,yshift = self.get_shift(x_stars_template,y_stars_template,x_stars_this,y_stars_this,max_deviation = max_deviation)
+        
         #res_list.append([res[2],xshift,yshift,np.sum((lambda1/lambda2)<good_star_threshold)/len(lambda1),len(lambda2)])
         print("Alignment result:",xshift,yshift)
-        if not test:
-            arg = (xshift,yshift,PID,template_img_id,len(objects),target_img_pid)
-            #mycursor = self.sql_interface.cnx.cursor()
-            sql = "UPDATE img SET img.x_to_template = %s, img.y_to_template = %s, img.align_process_id = %s, img.align_target_image_id = %s, img.n_star_resolved = %s where img.birth_process_id = %s;"
-            #mycursor.execute(sql,arg)
-            #self.sql_interface.cnx.commit()
-            self.sql_interface.execute(sql,arg)
+        #if not test:
+        arg = (xshift,yshift,PID,template_img_id,n_star_this,target_img_pid)
+        #mycursor = self.sql_interface.cnx.cursor()
+        sql = "UPDATE img SET img.x_to_template = %s, img.y_to_template = %s, img.align_process_id = %s, img.align_target_image_id = %s, img.n_star_resolved = %s where img.birth_process_id = %s;"
+        #mycursor.execute(sql,arg)
+        #self.sql_interface.cnx.commit()
+        self.sql_interface.execute(sql,arg)
         return 1
     
     def stacking(self,PID,site_id,method = "mean",PID_type = "birth",ret='success',par = {},consider_goodness = 0):
-
+        
         def nanaverage(A,weights,axis):
             w = weights.reshape(A.shape[0],1,1)
-            return np.nansum(A*w,axis=axis)/((~np.isnan(A))*w).sum(axis=axis)
-        
-        res_query = self.get_dep_img(PID,process_type=PID_type)
-        path_first_file,name_first_file = self.fs.get_dir_for_object("img",{"image_id":res_query[0]['image_id']})
-        header0 = fits.getheader(f"{path_first_file}/{name_first_file}")
-        res_dict = np.empty((len(res_query),*(fits.getdata(f"{path_first_file}/{name_first_file}").shape)))#,dtype = np.uint16)
-        res_dict[:] = np.nan
-        print('importing data...')
+            nume = ((~np.isnan(A))*w).sum(axis=axis)
+            nume[nume<10**-8]= np.nan
+            return np.nansum(A*w,axis=axis)/nume
+        try:
+            #print(self.sql_interface.get_process_dependence(PID))
+            #print(PID_type)
+            res_query = self.get_dep_img(PID,process_type=PID_type)
+            #print(res_query)
+            path_first_file,name_first_file = self.fs.get_dir_for_object("img",{"image_id":res_query[0]['image_id']})
+            header0 = fits.getheader(f"{path_first_file}/{name_first_file}")
+            res_dict = np.empty((len(res_query),*(fits.getdata(f"{path_first_file}/{name_first_file}").shape)))#,dtype = np.uint16)
+            res_dict[:] = np.nan
+            print('importing data...')
 
-        id_list = []
-        jd_start_list = []
-        jd_mid_list = []
-        jd_end_list = []
-        n_stack_list = []
-        goodness_list = []
-        for i,data_line in tqdm(enumerate(res_query)):
-            #image_id,jd_utc_start,jd_utc_mid,jd_utc_end,bjd_tdb_start_approximation,bjd_tdb_mid_approximation,bjd_tdb_end_approximation,n_stack,processed,image_type_id,flat_image_id,bias_image_id,x_to_template,y_to_template,obs_id,img_path,deleted_this,hierarchy_this = data_line
-            id_list.append(data_line['image_id'])
-            jd_start_list.append(data_line["jd_utc_start"])
-            jd_mid_list.append(data_line["jd_utc_mid"])
-            jd_end_list.append(data_line["jd_utc_end"])
-            n_stack_list.append(data_line["n_stack"])
-            coadd_weight.append(data_line["coadd_weight"])
-            x_to_template = data_line['x_to_template']
-            y_to_template = data_line['y_to_template']
-            if type(x_to_template)==type(None) and type(y_to_template)==type(None):
-                x_to_template=0
-                y_to_template=0
-            img_folder,img_name = self.fs.get_dir_for_object("img",{"image_id":data_line['image_id']})
-            img_path = f"{img_folder}/{img_name}"
-            img_data = fits.getdata(img_path)
-            y_to_template = -y_to_template
-            if x_to_template>0:
-                if y_to_template>0:
-                    res_dict[i,:-y_to_template,x_to_template:] = img_data[y_to_template:,:-x_to_template]
-                if y_to_template==0:
-                    res_dict[i,:,x_to_template:] = img_data[:,:-x_to_template]
-                if y_to_template<0:
-                    res_dict[i,-y_to_template:,x_to_template:] = img_data[:y_to_template,:-x_to_template]
-            if x_to_template==0:
-                if y_to_template>0:
-                    res_dict[i,:-y_to_template,:] = img_data[y_to_template:,:]
-                if y_to_template==0:
-                    res_dict[i,:,:] = img_data[:,:]
-                if y_to_template<0:
-                    res_dict[i,-y_to_template:,:] = img_data[:y_to_template,:]
-            if x_to_template<0:
-                if y_to_template>0:
-                    res_dict[i,:-y_to_template,:x_to_template] = img_data[y_to_template:,-x_to_template:]
-                if y_to_template==0:
-                    res_dict[i,:,:x_to_template] = img_data[:,-x_to_template:]
-                if y_to_template<0:
-                    res_dict[i,-y_to_template:,:x_to_template] = img_data[:y_to_template,-x_to_template:]   
-        if not consider_goodness:
-            weights = np.array(n_stack_list)
-        else:
-            weights = np.array(goodness_list)
+            id_list = []
+            jd_start_list = []
+            jd_mid_list = []
+            jd_end_list = []
+            n_stack_list = []
+            goodness_list = []
+            for i,data_line in tqdm(enumerate(res_query)):
+                #image_id,jd_utc_start,jd_utc_mid,jd_utc_end,bjd_tdb_start_approximation,bjd_tdb_mid_approximation,bjd_tdb_end_approximation,n_stack,processed,image_type_id,flat_image_id,bias_image_id,x_to_template,y_to_template,obs_id,img_path,deleted_this,hierarchy_this = data_line
+                id_list.append(data_line['image_id'])
+                jd_start_list.append(data_line["jd_utc_start"])
+                jd_mid_list.append(data_line["jd_utc_mid"])
+                jd_end_list.append(data_line["jd_utc_end"])
+                n_stack_list.append(data_line["n_stack"])
+                goodness_list.append(data_line["coadd_weight"])
+                x_to_template = data_line['x_to_template']
+                y_to_template = data_line['y_to_template']
+                if type(x_to_template)==type(None) and type(y_to_template)==type(None):
+                    x_to_template=0
+                    y_to_template=0
+                img_folder,img_name = self.fs.get_dir_for_object("img",{"image_id":data_line['image_id']})
+                img_path = f"{img_folder}/{img_name}"
+                img_data = fits.getdata(img_path)
+                y_to_template = -y_to_template
+                if x_to_template>0:
+                    if y_to_template>0:
+                        res_dict[i,:-y_to_template,x_to_template:] = img_data[y_to_template:,:-x_to_template]
+                    if y_to_template==0:
+                        res_dict[i,:,x_to_template:] = img_data[:,:-x_to_template]
+                    if y_to_template<0:
+                        res_dict[i,-y_to_template:,x_to_template:] = img_data[:y_to_template,:-x_to_template]
+                if x_to_template==0:
+                    if y_to_template>0:
+                        res_dict[i,:-y_to_template,:] = img_data[y_to_template:,:]
+                    if y_to_template==0:
+                        res_dict[i,:,:] = img_data[:,:]
+                    if y_to_template<0:
+                        res_dict[i,-y_to_template:,:] = img_data[:y_to_template,:]
+                if x_to_template<0:
+                    if y_to_template>0:
+                        res_dict[i,:-y_to_template,:x_to_template] = img_data[y_to_template:,-x_to_template:]
+                    if y_to_template==0:
+                        res_dict[i,:,:x_to_template] = img_data[:,-x_to_template:]
+                    if y_to_template<0:
+                        res_dict[i,-y_to_template:,:x_to_template] = img_data[:y_to_template,-x_to_template:]   
+            if not consider_goodness:
+                weights = np.array(n_stack_list)
+            else:
+                weights = np.array(goodness_list)
 
-        if method=="mean":
-            weights_revised = weights.copy()
-            if np.sum(weights)<10**-2:
-                weights_revised = weights+1
-            res = nanaverage(res_dict,weights_revised,axis = 0)
-        if method == "median":
-            res = np.nanmedian(res_dict,axis = 0)
-        if method == "ZOGY":
-            pass
+            if method=="mean":
+                weights_revised = weights.copy()
+                if np.sum(weights)<10**-2:
+                    weights_revised = weights+1
+                print(weights_revised)
+                res = nanaverage(res_dict,weights_revised,axis = 0)
+            if method == "median":
+                res = np.nanmedian(res_dict,axis = 0)
+            if method == "ZOGY":
+                pass
 
-        res = res.astype(np.float32)
-        new_name = f"n_{int(np.sum(n_stack_list))}_PID_{PID}_from_{name_first_file.split('from_')[-1]}"
-        
-        if res_query[0]['image_type_id']==2:
-            img_type_id = 3
-        else:
-            img_type_id = res_query[0]['image_type_id']
+            res = res.astype(np.float32)
+            new_name = f"n_{int(np.sum(n_stack_list))}_PID_{PID}_from_{name_first_file.split('from_')[-1]}"
+            
+            if res_query[0]['image_type_id']==2:
+                img_type_id = 3
+            else:
+                img_type_id = res_query[0]['image_type_id']
 
-        if not consider_goodness:
-            args = (np.min(jd_start_list),np.mean(jd_mid_list),np.max(jd_end_list),int(np.sum(n_stack_list)),1,img_type_id,res_query[0]['flat_image_id'],res_query[0]['dark_image_id'],0,0,res_query[0]['obs_id'],new_name,0,res_query[0]['align_target_image_id'],res_query[0]['batch'],site_id,PID)
-            sql = "INSERT INTO img (jd_utc_start,jd_utc_mid,jd_utc_end,n_stack,processed,image_type_id,flat_image_id,dark_image_id,x_to_template,y_to_template,obs_id,img_name,deleted,align_target_image_id,batch,store_site_id,birth_process_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
-        else:
-            args = (np.min(jd_start_list),np.mean(jd_mid_list),np.max(jd_end_list),int(np.sum(n_stack_list)),1,img_type_id,res_query[0]['flat_image_id'],res_query[0]['dark_image_id'],0,0,res_query[0]['obs_id'],new_name,0,res_query[0]['align_target_image_id'],res_query[0]['batch'],site_id,PID,np.sum(goodness_list))
-            sql = "INSERT INTO img (jd_utc_start,jd_utc_mid,jd_utc_end,n_stack,processed,image_type_id,flat_image_id,dark_image_id,x_to_template,y_to_template,obs_id,img_name,deleted,align_target_image_id,batch,store_site_id,birth_process_id,coadd_weight) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
-        #mycursor = self.sql_interface.cnx.cursor()
-        #mycursor.execute(sql,args)
-        #self.sql_interface.cnx.commit()
-        new_img_id = self.sql_interface.execute(sql,args,return_last_id=True)
-        #mycursor = self.sql_interface.cnx.cursor()
-        #mycursor.execute("SELECT LAST_INSERT_ID();")
-        # myresult = mycursor.fetchall()
-        # new_img_id = myresult[0][0] #auto_increment
-        path_first_file,name_first_file = self.fs.get_dir_for_object("img",{"image_id":new_img_id})
-        fits.writeto(f"{path_first_file}/{name_first_file}",res,header = header0,overwrite=True)
-        print("recording stacking")
-        for i in id_list:
-            args = (new_img_id,i)
-            sql = "INSERT INTO img_stacking (image_id,stacked_id) VALUES (%s,%s)"
-            mycursor.execute(sql,args)
-            self.sql_interface.cnx.commit()
-        if ret=="success":
-            return 1
-        if ret=="new_id":
-            return new_img_id
+            if not consider_goodness:
+                args = (np.min(jd_start_list),np.mean(jd_mid_list),np.max(jd_end_list),int(np.sum(n_stack_list)),1,img_type_id,res_query[0]['flat_image_id'],res_query[0]['dark_image_id'],0,0,res_query[0]['obs_id'],new_name,0,res_query[0]['align_target_image_id'],res_query[0]['batch'],site_id,PID)
+                sql = "INSERT INTO img (jd_utc_start,jd_utc_mid,jd_utc_end,n_stack,processed,image_type_id,flat_image_id,dark_image_id,x_to_template,y_to_template,obs_id,img_name,deleted,align_target_image_id,batch,store_site_id,birth_process_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+            else:
+                args = (np.min(jd_start_list),np.mean(jd_mid_list),np.max(jd_end_list),int(np.sum(n_stack_list)),1,img_type_id,res_query[0]['flat_image_id'],res_query[0]['dark_image_id'],0,0,res_query[0]['obs_id'],new_name,0,res_query[0]['align_target_image_id'],res_query[0]['batch'],site_id,PID,np.sum(goodness_list))
+                sql = "INSERT INTO img (jd_utc_start,jd_utc_mid,jd_utc_end,n_stack,processed,image_type_id,flat_image_id,dark_image_id,x_to_template,y_to_template,obs_id,img_name,deleted,align_target_image_id,batch,store_site_id,birth_process_id,coadd_weight) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+            #mycursor = self.sql_interface.cnx.cursor()
+            #mycursor.execute(sql,args)
+            #self.sql_interface.cnx.commit()
+            new_img_id = self.sql_interface.execute(sql,args,return_last_id=True)
+            #mycursor = self.sql_interface.cnx.cursor()
+            #mycursor.execute("SELECT LAST_INSERT_ID();")
+            # myresult = mycursor.fetchall()
+            # new_img_id = myresult[0][0] #auto_increment
+            path_first_file,name_first_file = self.fs.get_dir_for_object("img",{"image_id":new_img_id})
+            _ = self.fs.create_dir_for_object("img",{"image_id":new_img_id})
+            fits.writeto(f"{path_first_file}/{name_first_file}",res,header = header0,overwrite=True)
+            print("recording stacking")
+            for i in id_list:
+                args = (new_img_id,i)
+                sql = "INSERT INTO img_stacking (image_id,stacked_id) VALUES (%s,%s)"
+                #mycursor.execute(sql,args)
+                self.sql_interface.execute(sql,args)
+            if ret=="success":
+                return 1
+            if ret=="new_id":
+                return new_img_id
+        except Exception as e:
+            print(e)
+            return 0
     def select_good_img(self,PID):
-        res_query = self.get_dep_img(PID,process_type=PID_type)
-        weight_result = []
+        res_query = self.get_dep_img(PID,process_type='align')
+
         PIDs = []
         n_stars = []
         bkg_rms_list = []
@@ -435,8 +455,8 @@ ORDER BY
         # Eliminate the images with cloud or tracking issue
         mask_star = sigma_clip(np.array(n_stars),sigma=3).mask
         # Eliminate the images with aeroplane or other issues
-        mask_bkg = sigma_clip(np.array(bkg_rms_list),sigma_lower = 100,sigma_upper = 2).mask
-        mask_result = mask_star & mask_bkg
+        mask_bkg = sigma_clip(np.array(bkg_rms_list),sigma_lower = 100,sigma_upper = 5).mask
+        mask_result = ~(mask_star | mask_bkg)
         for i in range(len(PIDs)):
         
             PID_this,mask_this = PIDs[i],mask_result[i]
@@ -490,6 +510,7 @@ ORDER BY
         calibrated_image = fits.getdata(f"{target_image_path}/{target_image_name}")
         calibrated_image_header = fits.getheader(f"{target_image_path}/{target_image_name}")
         new_target_image_name = f"cal_{process_PID}_{target_image_name}"
+        img_type_id_this = img_target["image_type_id"]
         if 1==img_target["image_type_id"]: 
             img_type_id_this = 2
         if 5==img_target["image_type_id"]: 

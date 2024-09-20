@@ -70,10 +70,10 @@ class process_publisher:
             'sky_id': sky_id,
             'as_new_template': as_new_template
         }
-        return self.publish_CMD(self.default_site_id, self.default_group_id, f'detect_source|{param_dict}', [new_template_PI])
+        return self.publish_CMD(self.default_site_id, self.default_group_id, f'detect_source|{param_dict}', [new_template_PID])
 
     def calibrate_observation(self,obs_id,PID_sub,PID_div):
-        sql = 'SELECT birth_process_id FROM img WHERE obs_id = %s and n_stack=1;'
+        sql = 'SELECT birth_process_id FROM img WHERE obs_id = %s and n_stack=1 and image_type_id=1;'
         args = (obs_id,)
         result = self.sql_interface.query(sql,args)
         pid_frame_list = list(result['birth_process_id'])
@@ -125,9 +125,9 @@ class process_publisher:
             consume_group_id=self.default_group_id 
         param_dict={'template_birth_PID':template_birth_PID,'cal_birth_PID':cal_birth_PID}
         if type(cal_birth_PID)==list:
-            PID_dep_list = cal_birth_PID
+            PID_dep_list = cal_birth_PID+[template_birth_PID]
         else:
-            PID_dep_list = [cal_birth_PID]
+            PID_dep_list = [cal_birth_PID]+[template_birth_PID]
         PID_align = self.publish_CMD(consume_site_id,consume_group_id,f'align|{param_dict}',PID_dep_list)
         return PID_align
     
@@ -181,6 +181,8 @@ class process_publisher:
 
 
     def stacking(self,PIDs,PID_type='birth',num_image_limit = 5,consume_site_id=-1,consume_group_id=-1,consider_goodness=0,additional_dependence_list = []):
+        PIDs = [int(p) for p in PIDs]
+        additional_dependence_list = [int(p) for p in additional_dependence_list]
         if consume_site_id==-1:
             consume_site_id=self.default_site_id
         if consume_group_id==-1:
@@ -203,7 +205,7 @@ class process_publisher:
 
     def publish_CMD(self,process_site,process_group,CMD,dep_PID_list):
         PID_this = self.generate_PID()
-
+        
         mycursor = self.sql_interface.cnx.cursor()
         sql = "INSERT INTO process_list (process_id,process_cmd,process_status_id,process_site_id,process_group_id) VALUES (%s, %s,1,%s,%s)"
         argsql = (PID_this,CMD,process_site,process_group)
