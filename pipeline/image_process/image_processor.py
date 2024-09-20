@@ -84,7 +84,7 @@ class image_processor:
     def crossmatch_source(self,PID,sky_id,resolve_sigma = 5,minarea = 10,max_distance = 5,max_ratio = 10):
         pass
 
-    def detect_source_in_template(self,PID,sky_id,resolve_sigma = 5,minarea = 10,max_distance = 5,max_ratio = 10):
+    def detect_source_in_template(self,PID,sky_id,resolve_sigma = 3,minarea = 100,max_distance = 5,max_ratio = 2,debug = False,as_new_template = True):
         # 1. get the template image
         # 2. get the sources in template image
         # 3. get the sources in target image
@@ -114,9 +114,11 @@ class image_processor:
         img_path = f"{path_first_file}/{name_first_file}"
         img_data = fits.getdata(img_path).byteswap().newbyteorder()
         bkg = sep.Background(img_data)
-        objects = sep.extract(img_data-bkg,resolve_sigma,err=bkg.rms(),minarea=minarea)
+        data_sub = img_data-bkg
+        objects = sep.extract(data_sub,resolve_sigma,err=bkg.rms(),minarea=minarea)
         # 过滤掉长宽比大于max_ratio的目标
         objects = objects[objects['a']/objects['b']<max_ratio]
+        print(f"detected {len(objects)} objects")
         # photometry
         flux, fluxerr, flag = sep.sum_circle(data_sub, objects['x'], objects['y'],
                                      10.0, err=bkg.globalrms, gain=1.0)
@@ -177,32 +179,42 @@ ORDER BY
             for ind_obj,ind_archive, dis in zip(range(len(nearest_indices)),nearest_indices,distances):
                 if dis < max_distance:
                     matched_indices.append((ind_obj,ind_archive))
-            
-            # 更新数据库
-        for ind_obj,ind_archive in matched_indices:
-            sql = """
-            INSERT INTO tianyu_source_position (source_id, template_img_id, x_template, y_template,flux_template,e_flux_template) 
-            VALUES (%s,%s,%s,%s,%s,%s);
-            """
-            args = (archive_star_result['source_id'][ind_archive], img_id_this,x_star_this_absolute[ind_obj], y_star_this_absolute[ind_obj],flux[ind_obj],fluxerr[ind_obj])
+        if not debug:
+                # 更新数据库
+            if as_new_template:
+                sql = "UPDATE sky_image_map SET template_in_use=%s;"
+                args = (0,)
+                self.sql_interface.execute(sql, args)
+                
+            sql = "INSERT INTO sky_image_map (sky_id,image_id,template_in_use,absolute_deviation_x,absolute_deviation_y) VALUES (%s,%s,%s,%s,%s)"
+            args = (sky_id,img_id_this,int(as_new_template),absolute_deviation_x,absolute_deviation_y)
             self.sql_interface.execute(sql, args)
-        
-        # 插入新检测到的源
-        new_sources = set(range(len(objects))) - set([m[0] for m in matched_indices])
-        for i in new_sources:
+            for ind_obj,ind_archive in matched_indices:
+                sql = """
+                INSERT INTO tianyu_source_position (source_id, template_img_id, x_template, y_template,flux_template,e_flux_template) 
+                VALUES (%s,%s,%s,%s,%s,%s);
+                """
+                args = (archive_star_result['source_id'][ind_archive], img_id_this,x_star_this_absolute[ind_obj], y_star_this_absolute[ind_obj],flux[ind_obj],fluxerr[ind_obj])
+                self.sql_interface.execute(sql, args)
             
-            # 首先插入新源到 tianyu_source 表
-            sql_source = "INSERT INTO tianyu_source (sky_id) VALUES (%s)"
-            args_source = (sky_id,)
-            new_source_id = self.sql_interface.execute(sql_source, args_source, return_last_id=True)
+            # 插入新检测到的源
+            new_sources = set(range(len(objects))) - set([m[0] for m in matched_indices])
+            for i in new_sources:
+                
+                # 首先插入新源到 tianyu_source 表
+                sql_source = "INSERT INTO tianyu_source (sky_id) VALUES (%s)"
+                args_source = (sky_id,)
+                new_source_id = self.sql_interface.execute(sql_source, args_source, return_last_id=True)
+                
+                # 然后插入新源的位置信息到 tianyu_source_position 表
+                sql_position = "INSERT INTO tianyu_source_position (source_id, template_img_id, x_template, y_template, flux_template, e_flux_template) VALUES (%s, %s, %s, %s, %s, %s)"
+                args_position = (new_source_id, img_id_this, x_star_this_absolute[i], y_star_this_absolute[i], flux[i], fluxerr[i])
+                self.sql_interface.execute(sql_position, args_position)
+                #self.sql_interface.execute(sql, args)
             
-            # 然后插入新源的位置信息到 tianyu_source_position 表
-            sql_position = "INSERT INTO tianyu_source_position (source_id, template_img_id, x_template, y_template, flux_template, e_flux_template) VALUES (%s, %s, %s, %s, %s, %s)"
-            args_position = (new_source_id, img_id_this, x_star_this_absolute[i], y_star_this_absolute[i], flux[i], fluxerr[i])
-            self.sql_interface.execute(sql_position, args_position)
-            self.sql_interface.execute(sql, args)
-        
-        print(f"crossmatched {len(matched_indices)} sources,  {len(new_sources)} new sources")
+            print(f"crossmatched {len(matched_indices)} sources,  {len(new_sources)} new sources")
+        else:
+            self.show_source_img(data_sub,objects)
         return 1
 
     def get_shift(self,x_stars_template,y_stars_template,x_stars_this,y_stars_this,max_deviation = 400):
@@ -223,7 +235,7 @@ ORDER BY
         fig, ax = plt.subplots()
         m, s = np.mean(img_data), np.std(img_data)
         im = ax.imshow(img_data, interpolation='nearest', cmap='gray',
-                    vmin=m-s, vmax=m+s, origin='lower')
+                    vmin=m-0.3*s, vmax=m+0.5*s, origin='lower')
 
         # plot an ellipse for each object
         for i in range(len(objects)):

@@ -61,7 +61,7 @@ class process_publisher:
         return PID_this
 
 
-    def detect_source(self, new_template_PID, sky_id, as_new_template = False):
+    def detect_source(self, new_template_PID, sky_id, as_new_template = 1):
         """
         交叉匹配新解析的恒星和原始恒星
         """

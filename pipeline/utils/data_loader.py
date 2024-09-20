@@ -64,7 +64,7 @@ class data_loader:
             if sql.split(' ')[2]=='observation':
                 sql = 'UPDATE observation SET process_id=%s where obs_id=%s;'
             if sql.split(' ')[2]=='sky':
-                sql = 'UPDATE observation SET process_id=%s where sky_id=%s;'                
+                sql = 'UPDATE sky SET process_id=%s where sky_id=%s;'                
             args = (PID,img_id)
             mycursor.execute(sql,args)
             self.sql_interface.cnx.commit()

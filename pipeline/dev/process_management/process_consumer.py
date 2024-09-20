@@ -102,6 +102,8 @@ class process_consumer:
 
         if cmd == 'align':
             success = self.image_processor.alignment(PID,par["template_birth_PID"],par["cal_birth_PID"])
+        if cmd=='detect_source':
+            success = self.image_processor.detect_source_in_template(PID,par["sky_id"],as_new_template = par["as_new_template"])
         #time.sleep(0.5)
         #return 0
         if success:
