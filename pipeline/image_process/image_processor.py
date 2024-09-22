@@ -26,92 +26,6 @@ class image_processor:
         self.fs = fs.file_system()
         self.sql_interface = sql_interface.sql_interface()
         #self.pp_this_site = process_pub.process_publisher(site_id = site_id, group_id = group_id)
-
-
-    # def generate_template_image(self,site_id,sky_id,obs_id,n_stack=1):
-    #     #align stack map to sky
-    #     
-    #     outpath = "/home/yichengrui/workspace/TianYu/pipeline/image_process/out/reduced_res/stack_img/template_obs_"+str(alignment_img_obs_id)+"_hierarchy_"+str(alignment_img_hierarchy)+"_imgtype_"+str(alignment_img_type)+"_"+str(hash(time.time()))+".fit"
-    #     mycursor = self.dl.cnx.cursor()
-    #     arg = (alignment_img_obs_id,alignment_img_hierarchy,self.dl.image_type_id[alignment_img_type])
-    #     sql = "SELECT i.obs_id,i.img_path,i.image_id from img as i where i.obs_id = %s and hierarchy = %s and i.image_type_id = %s;"
-    #     mycursor.execute(sql,arg)
-    #     myresult = mycursor.fetchall()
-    #     if len(myresult)<1:
-    #         print("Cannot fing image")
-    #         return -1
-        
-    #     base_id = myresult[0][2]
-    #     alignment_result = self.al.get_deviation(base_id,alignment_img_obs_id, alignment_img_hierarchy, alignment_img_type,good_star_threshold = good_star_threshold)
-
-    #     used_img_list = []
-    #     for alires in alignment_result:
-    #         if alires[3]<good_img_threshold:
-    #             continue
-    #         else:
-    #             used_img_list.append(alires[0])
-    #     new_img_id = self.cl.stacking(outpath,stack_img_id_list = used_img_list,mode = "fixed_id",method = "mean")
-
-    #     mycursor = self.dl.cnx.cursor()
-    #     arg = (new_img_id,)
-    #     sql = "INSERT INTO sky (template_image_id) VALUES (%s);"
-    #     mycursor.execute(sql,arg)
-    #     self.dl.cnx.commit()
-
-    #     mycursor = self.dl.cnx.cursor()
-    #     mycursor.execute("SELECT LAST_INSERT_ID();")
-    #     myresult = mycursor.fetchall()
-    #     new_sky_id = myresult[0][0] #auto_increment
-        
-    #     return new_sky_id,outpath
-    def extract_flux(self, image_PID, template_birth_PID):
-        # 获取图像数据
-        sql = "SELECT * FROM img WHERE birth_process_id = %s;"
-        args = (image_PID,)
-        
-        img_this = self.sql_interface.query() 
-        img_this = self.get_dep_img(PID)
-        assert len(img_this) == 1
-        img_id_this = img_this[0]['image_id']
-        path_first_file, name_first_file = self.fs.get_dir_for_object("img", {"image_id": img_id_this})
-        img_path = f"{path_first_file}/{name_first_file}"
-        img_data = fits.getdata(img_path).byteswap().newbyteorder()
-
-        # 获取背景
-        bkg = sep.Background(img_data)
-        
-        img_obs_id = img_this[0]['obs_id']
-
-        # 获取历史上的星位置
-        sql = """
-        SELECT ts.source_id, tsp.x_template, tsp.y_template 
-        FROM tianyu_source AS ts
-        INNER JOIN tianyu_source_position AS tsp ON ts.source_id = tsp.source_id
-        INNER JOIN img ON tsp.template_img_id = img.image_id
-        WHERE img.image_id = %s
-        """
-        args = (img_id_this,)
-        star_positions = self.sql_interface.query(sql, args)
-
-        # 提取流量
-        flux, fluxerr, flag = sep.sum_circle(img_data, 
-                                             star_positions['x_template'], 
-                                             star_positions['y_template'],
-                                             3.0, 
-                                             err=bkg.rms(), 
-                                             gain=1.0)
-
-        # 保存到数据库
-        for i, row in star_positions.iterrows():
-            sql = """
-            INSERT INTO tianyu_source_flux 
-            (source_id, image_id, flux, flux_err) 
-            VALUES (%s, %s, %s, %s)
-            """
-            args = (row['source_id'], img_id_this, float(flux[i]), float(fluxerr[i]))
-            self.sql_interface.execute(sql, args)
-
-        print(f"已为图像 {img_id_this} 提取并保存 {len(star_positions)} 个源的流量")
     def get_dep_img(self,PID,process_type = "birth"):
         res_query = []
         PID_stacker = self.sql_interface.get_process_dependence(PID)
@@ -128,6 +42,32 @@ class image_processor:
                 #print(result)
                 res_query.extend(result.to_dict("records"))
         return res_query
+
+
+    def extract_flux(self, PID,image_PID, template_source_PID):
+        # 获取图像数据
+        sql = "SELECT * FROM img WHERE birth_process_id = %s;"
+        args = (image_PID,)
+        img_this = self.sql_interface.query(sql, args)
+        
+        sql = "SELECT tsp.source_id as source_id, tsp.x_template as x_template,tsp.y_template as y_template, sim.image_id as image_id, sim.absolute_deviation_x as deviation_x, sim.absolute_deviation_y as deviation_y FROM tianyu_source_position as tsp INNER JOIN sky_image_map as sim ON sim.template_img_id =tsp.image_id WHERE sim.process_id = %s"
+        args = (template_source_PID,)
+        star_template = self.sql_interface.query() 
+        print(star_template)
+        assert len(img_this) == 1
+        img_id_this = int(img_this.loc[0,'image_id'])
+        path_first_file, name_first_file = self.fs.get_dir_for_object("img", {"image_id": img_id_this})
+        img_path = f"{path_first_file}/{name_first_file}"
+        img_data = fits.getdata(img_path).byteswap().newbyteorder()
+
+        # 获取背景
+        bkg = sep.Background(img_data)
+        
+        print(star_template)
+        print(img_this)
+
+        return 1
+
 
     def detect_source_in_template(self,PID,sky_id,resolve_sigma = 3,minarea = 100,max_distance = 5,max_ratio = 2,debug = False,as_new_template = True):
         # 1. get the template image
@@ -231,8 +171,8 @@ ORDER BY
                 args = (0,)
                 self.sql_interface.execute(sql, args)
                 
-            sql = "INSERT INTO sky_image_map (sky_id,image_id,template_in_use,absolute_deviation_x,absolute_deviation_y) VALUES (%s,%s,%s,%s,%s)"
-            args = (sky_id,img_id_this,int(as_new_template),absolute_deviation_x,absolute_deviation_y)
+            sql = "INSERT INTO sky_image_map (sky_id,image_id,template_in_use,absolute_deviation_x,absolute_deviation_y,process_id) VALUES (%s,%s,%s,%s,%s,%s)"
+            args = (sky_id,img_id_this,int(as_new_template),absolute_deviation_x,absolute_deviation_y,PID)
             self.sql_interface.execute(sql, args)
             for ind_obj,ind_archive in matched_indices:
                 sql = "SELECT * FROM tianyu_source_position WHERE source_id = %s AND template_img_id = %s;"
