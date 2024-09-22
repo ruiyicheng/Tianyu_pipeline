@@ -64,8 +64,54 @@ class image_processor:
     #     new_sky_id = myresult[0][0] #auto_increment
         
     #     return new_sky_id,outpath
-    def extract_flux(self,PID):
-        pass
+    def extract_flux(self, image_PID, template_birth_PID):
+        # 获取图像数据
+        sql = "SELECT * FROM img WHERE birth_process_id = %s;"
+        args = (image_PID,)
+        
+        img_this = self.sql_interface.query() 
+        img_this = self.get_dep_img(PID)
+        assert len(img_this) == 1
+        img_id_this = img_this[0]['image_id']
+        path_first_file, name_first_file = self.fs.get_dir_for_object("img", {"image_id": img_id_this})
+        img_path = f"{path_first_file}/{name_first_file}"
+        img_data = fits.getdata(img_path).byteswap().newbyteorder()
+
+        # 获取背景
+        bkg = sep.Background(img_data)
+        
+        img_obs_id = img_this[0]['obs_id']
+
+        # 获取历史上的星位置
+        sql = """
+        SELECT ts.source_id, tsp.x_template, tsp.y_template 
+        FROM tianyu_source AS ts
+        INNER JOIN tianyu_source_position AS tsp ON ts.source_id = tsp.source_id
+        INNER JOIN img ON tsp.template_img_id = img.image_id
+        WHERE img.image_id = %s
+        """
+        args = (img_id_this,)
+        star_positions = self.sql_interface.query(sql, args)
+
+        # 提取流量
+        flux, fluxerr, flag = sep.sum_circle(img_data, 
+                                             star_positions['x_template'], 
+                                             star_positions['y_template'],
+                                             3.0, 
+                                             err=bkg.rms(), 
+                                             gain=1.0)
+
+        # 保存到数据库
+        for i, row in star_positions.iterrows():
+            sql = """
+            INSERT INTO tianyu_source_flux 
+            (source_id, image_id, flux, flux_err) 
+            VALUES (%s, %s, %s, %s)
+            """
+            args = (row['source_id'], img_id_this, float(flux[i]), float(fluxerr[i]))
+            self.sql_interface.execute(sql, args)
+
+        print(f"已为图像 {img_id_this} 提取并保存 {len(star_positions)} 个源的流量")
     def get_dep_img(self,PID,process_type = "birth"):
         res_query = []
         PID_stacker = self.sql_interface.get_process_dependence(PID)
