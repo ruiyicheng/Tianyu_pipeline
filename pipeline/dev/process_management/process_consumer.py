@@ -11,7 +11,7 @@ from Tianyu_pipeline.pipeline.utils import sql_interface
 from Tianyu_pipeline.pipeline.dev.file_system import file_system as fs
 from Tianyu_pipeline.pipeline.utils import data_transfer as dt
 from Tianyu_pipeline.pipeline.image_process import image_processor as image_processor
-
+from Tianyu_pipeline.pipeline.dev.calibration import calibrator as calibrator
 class process_consumer:
     def __init__(self,mode = 'test',pika_host = "192.168.1.107",site_id=1,group_id = 1,host_sql = '192.168.1.107',user_sql = 'tianyu', password_sql = 'tianyu'):
         self.sql_interface = sql_interface.sql_interface()
@@ -24,6 +24,7 @@ class process_consumer:
         self.dl = dl.data_loader()
         self.fs = fs.file_system()
         self.ft = dt.file_transferer()
+        self.calibrator = calibrator.calibrator()
         self.channel.queue_declare(queue=f'command_queue_{self.site_id}_{self.group_id}', durable=True)
         
     # def queue_db(self,sql,argsql):
@@ -104,6 +105,8 @@ class process_consumer:
             success = self.image_processor.alignment(PID,par["template_birth_PID"],par["cal_birth_PID"])
         if cmd=='detect_source':
             success = self.image_processor.detect_source_in_template(PID,par["sky_id"],as_new_template = par["as_new_template"])
+        if cmd == "crossmatch":
+            success = self.calibrator.crossmatch_external(par['sky_id'])
         #time.sleep(0.5)
         #return 0
         if success:

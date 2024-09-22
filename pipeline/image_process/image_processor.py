@@ -81,8 +81,6 @@ class image_processor:
                 #print(result)
                 res_query.extend(result.to_dict("records"))
         return res_query
-    def crossmatch_source(self,PID,sky_id,resolve_sigma = 5,minarea = 10,max_distance = 5,max_ratio = 10):
-        pass
 
     def detect_source_in_template(self,PID,sky_id,resolve_sigma = 3,minarea = 100,max_distance = 5,max_ratio = 2,debug = False,as_new_template = True):
         # 1. get the template image
@@ -174,7 +172,7 @@ ORDER BY
             # 交叉匹配
             max_distance = max_distance  # 最大匹配距离(像素)
             matched_indices = []
-            nearest_indices, distances = find_nearest_kdtree(x_star_this_absolute,y_star_this_absolute,x_template,y_star_this)
+            nearest_indices, distances = find_nearest_kdtree(x_star_this_absolute,y_star_this_absolute,x_template,y_template)
 
             for ind_obj,ind_archive, dis in zip(range(len(nearest_indices)),nearest_indices,distances):
                 if dis < max_distance:
@@ -190,12 +188,16 @@ ORDER BY
             args = (sky_id,img_id_this,int(as_new_template),absolute_deviation_x,absolute_deviation_y)
             self.sql_interface.execute(sql, args)
             for ind_obj,ind_archive in matched_indices:
-                sql = """
-                INSERT INTO tianyu_source_position (source_id, template_img_id, x_template, y_template,flux_template,e_flux_template) 
-                VALUES (%s,%s,%s,%s,%s,%s);
-                """
-                args = (archive_star_result['source_id'][ind_archive], img_id_this,x_star_this_absolute[ind_obj], y_star_this_absolute[ind_obj],flux[ind_obj],fluxerr[ind_obj])
-                self.sql_interface.execute(sql, args)
+                sql = "SELECT * FROM tianyu_source_position WHERE source_id = %s AND template_img_id = %s;"
+                args = (int(archive_star_result['source_id'][ind_archive]), int(img_id_this))
+                result = self.sql_interface.query(sql,args)
+                if len(result)==0:
+                    sql = """
+                    INSERT INTO tianyu_source_position (source_id, template_img_id, x_template, y_template,flux_template,e_flux_template) 
+                    VALUES (%s,%s,%s,%s,%s,%s);
+                    """
+                    args = (int(archive_star_result['source_id'][ind_archive]), int(img_id_this),float(x_star_this_absolute[ind_obj]), float(y_star_this_absolute[ind_obj]),float(flux[ind_obj]),float(fluxerr[ind_obj]))
+                    self.sql_interface.execute(sql, args)
             
             # 插入新检测到的源
             new_sources = set(range(len(objects))) - set([m[0] for m in matched_indices])

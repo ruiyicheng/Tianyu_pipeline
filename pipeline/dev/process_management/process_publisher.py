@@ -71,7 +71,9 @@ class process_publisher:
             'as_new_template': as_new_template
         }
         return self.publish_CMD(self.default_site_id, self.default_group_id, f'detect_source|{param_dict}', [new_template_PID])
-
+    def crossmatch(self,sky_id,dep_PIDs = []):
+        param_dict = {'sky_id': sky_id}
+        return self.publish_CMD(self.default_site_id, self.default_group_id, f'crossmatch|{param_dict}', dep_PIDs)
     def calibrate_observation(self,obs_id,PID_sub,PID_div):
         sql = 'SELECT birth_process_id FROM img WHERE obs_id = %s and n_stack=1 and image_type_id=1;'
         args = (obs_id,)

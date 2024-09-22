@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from Tianyu_pipeline.pipeline.utils import sql_interface 
 import Tianyu_pipeline.pipeline.dev.file_system.file_system  as fs
+from astroquery.gaia import Gaia
 class data_loader:
     def __init__(self):
         self.sql_interface = sql_interface.sql_interface()
@@ -97,9 +98,6 @@ class data_loader:
             return df
         return myresult,headers
 
-    def get_observation(self,target_n,jd_start,jd_end):
-        pass
-
     def new_observation(self,img_dir,info = {"observation_type":"science","target":"flat","instrument":"L350+QHY600m","obs_site":"TDLI_MGO","observer":"Yicheng Rui"}):
         
         file_path = sorted(glob.glob(img_dir))
@@ -143,7 +141,7 @@ class data_loader:
             mycursor.execute(sql,args)
             self.sql_interface.cnx.commit()
 
-    def search_GDR3_by_square(self,ra=180,dec=0,fov=1,Gmag_limit = 15):
+    def search_GDR3_by_square(self,ra=180,dec=0,fov=1,Gmag_limit = 17,method = "online"):
         def coord_region(ra,dec,scan_angle,fov):
             deg2rad = np.pi/180
             fov = fov/2*deg2rad #deg
@@ -171,12 +169,25 @@ class data_loader:
             #'POLYGON((-136.0 0.0,-135.0 0.0,-135.0 0.35,-136.0 0.35,-136.0 0.0))'
             res = 'POLYGON(('+str(res_coord[0][0])+' '+str(res_coord[1][0])+','+str(res_coord[0][1])+' '+str(res_coord[1][1])+','+str(res_coord[0][2])+' '+str(res_coord[1][2])+','+str(res_coord[0][3])+' '+str(res_coord[1][3])+','+str(res_coord[0][4])+' '+str(res_coord[1][4])+'))'
             return res
-        polycmd = generate_sql_command(ra,dec,fov)
-        sql = "select g3.source_id,g3.ra,g3.`dec`,g3.phot_g_mean_mag,g3.parallax,g3.pmra,g3.pmdec,gv.best_class_name_id,gv.best_score from gaia_gost.gdr3 as g3 LEFT JOIN gdr3_variable as gv on gv.gdr3_id=g3.source_id where ST_Within(pos,ST_SRID(ST_PolyFromText('"+polycmd+"'),4326)) and g3.phot_g_mean_mag<"+str(Gmag_limit)+";"
-        mycursor = self.sql_interface.cnx.cursor()
-        mycursor.execute(sql)
-        myresult = mycursor.fetchall()
-        return myresult
+        if method == "database":
+            polycmd = generate_sql_command(ra,dec,fov)
+            sql = "select g3.source_id,g3.ra,g3.`dec`,g3.phot_g_mean_mag,g3.parallax,g3.pmra,g3.pmdec,gv.best_class_name_id,gv.best_score from gaia_gost.gdr3 as g3 LEFT JOIN gdr3_variable as gv on gv.gdr3_id=g3.source_id where ST_Within(pos,ST_SRID(ST_PolyFromText('"+polycmd+"'),4326)) and g3.phot_g_mean_mag<"+str(Gmag_limit)+";"
+            mycursor = self.sql_interface.cnx.cursor()
+            mycursor.execute(sql)
+            myresult = mycursor.fetchall()
+            return myresult
+        elif method == "online":
+
+            sql = f'''
+            SELECT g3.source_id,g3.ra,g3.dec,g3.phot_g_mean_mag,g3.phot_g_mean_flux_over_error, g3.parallax,g3.pmra,g3.pmdec,gv.best_class_name,gv.best_class_score from gaiadr3.gaia_source as g3 LEFT JOIN gaiadr3.vari_classifier_result as gv on gv.source_id=g3.source_id 
+WHERE g3.phot_g_mean_mag<{Gmag_limit} AND
+CONTAINS(
+    POINT('ICRS',g3.ra,g3.dec),
+    CIRCLE('ICRS',{ra},{dec},{fov})
+)=1'''      
+            job = Gaia.launch_job_async(sql)
+            r = job.get_results()
+            return r
     
     def load_UTC(self,PID):
         picture_birth_PID = self.sql_interface.get_process_dependence(PID)
