@@ -64,7 +64,8 @@ class image_processor:
     #     new_sky_id = myresult[0][0] #auto_increment
         
     #     return new_sky_id,outpath
-
+    def extract_flux(self,PID):
+        pass
     def get_dep_img(self,PID,process_type = "birth"):
         res_query = []
         PID_stacker = self.sql_interface.get_process_dependence(PID)
