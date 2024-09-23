@@ -101,6 +101,7 @@ XML_NAME         sex.xml        # Filename for XML output
 XSL_URL          file:///usr/local/share/sextractor/sextractor.xsl
                                 # Filename for XSL style-sheet
 """
+
     def use(self,input_file_path,output_file_path = 'temp.fit',keep_out = True,ymax = 2200,use_sep = False):
         if not use_sep:
             if not keep_out:
