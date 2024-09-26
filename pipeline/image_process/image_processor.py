@@ -108,22 +108,26 @@ class image_processor:
         
         
         # writing the flux into db not consider marginal results
-        sql = "SELECT * FROM star_pixel_img where image_id = %s;"
-        args = (int(star_template.loc[0,'image_id']),) 
-        results = self.sql_interface.query(sql,args)
-        print(results)
-        results_source = set([])
-        if len(results)>0:
-            results_source = results['source_id']
-        for i in range(len(x_in_template)):
+        # sql = "SELECT * FROM star_pixel_img where image_id = %s;"
+        # args = (int(star_template.loc[0,'image_id']),) 
+        # results = self.sql_interface.query(sql,args)
+        # print(results)
+        # results_source = set([])
+        # if len(results)>0:
+        #     results_source = results['source_id']
+        sql = "INSERT INTO star_pixel_img (image_id, source_id, flux_raw, flux_raw_error, birth_process_id) VALUES (%s,%s,%s,%s,%s);"
+        args = []
+
+        for i in tqdm(range(len(x_in_template))):
             if x_in_template[i]>max_x_img-n_margin_pixels or x_in_template[i]<n_margin_pixels or y_in_template[i]>max_y_img-n_margin_pixels or y_in_template[i]<n_margin_pixels:
                 continue
 
-            if not int(star_template.loc[i,'source_id']) in results_source:
-                sql = "INSERT INTO star_pixel_img (image_id, source_id, flux_raw, flux_raw_error, birth_process_id) VALUES (%s,%s,%s,%s,%s);"
-                args = (int(star_template.loc[i,'image_id']),int(star_template.loc[i,'source_id']), flux[i],fluxerr[i],PID)
-                self.sql_interface.execute(sql,args)
-                #print(args)
+            args.append( (int(img_id_this),int(star_template.loc[i,'source_id']), flux[i],fluxerr[i],PID))
+
+        print(len(sql.split('%s')))
+
+        self.sql_interface.executemany(sql,args)
+        #print(args)
 
         return 1
 

@@ -61,6 +61,14 @@ class sql_interface:
                     mycursor.execute("SELECT LAST_INSERT_ID()")
                     last_id = mycursor.fetchone()[0]
                     return last_id
+    def executemany(self, sql, args,db = 'tianyudev'):
+        with mysql.connector.connect(user='tianyu', password='tianyu',
+                            host='192.168.1.107',
+                            database = db) as cnx:
+            with cnx.cursor() as mycursor:
+                mycursor.executemany(sql, args)
+                cnx.commit()
+
     def query(self,sql,args,return_df = True,db = 'tianyudev'):
         self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
                             host='192.168.1.107',
