@@ -59,10 +59,18 @@ class image_processor:
         path_first_file, name_first_file = self.fs.get_dir_for_object("img", {"image_id": img_id_this})
         img_path = f"{path_first_file}/{name_first_file}"
         img_data = fits.getdata(img_path).byteswap().newbyteorder()
-
         # 获取背景
         bkg = sep.Background(img_data)
-        
+        bkgrms = bkg.rms()
+
+        x_in_template = np.array(star_template['x_template'].values)-np.array(star_template['deviation_x'])-int(img_this.loc[0,'x_to_template'])
+        y_in_template = np.array(star_template['y_template'].values)-np.array(star_template['deviation_y'])-int(img_this.loc[0,'y_to_template'])
+
+        # 10 20 30 can be decided by ml model
+        flux, fluxerr, flag = sep.sum_circle(img_data, x_in_template,y_in_template,10.0, err=bkgrms,bkgann = (20,30))
+
+
+
         print(star_template)
         print(img_this)
 
