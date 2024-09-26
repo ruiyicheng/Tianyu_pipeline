@@ -28,8 +28,20 @@ class process_publisher:
 
     #     pid_cal_list = self.calibrate_observation(obs_id,PID_sub,PID_div)
     #     self.generate_template(pid_cal_list,sky_id)
+    def extract_flux_batch(self,obs_id, resolve_id,nstack = 1):
+        if nstack==1:
+            image_type_id = 2
+        else:
+            image_type_id = 3
 
-        
+        sql = "SELECT * from img where n_stack= %s AND image_type_id = %s AND obs_id = %s;"
+        args = (nstack,image_type_id,obs_id)
+        results = self.sql_interface.query(sql,args)
+        PID_extract_list = []
+        if len(results)>0:
+            for _,r in results.iterrows():
+                PID_extract_list.append(self.extract_flux(int(r['birth_process_id']),int(resolve_id)))
+        return PID_extract_list
     def align_stack_img(self,calibrated_birth_PID_list,template_birth_PID = -1):
         if template_birth_PID==-1:
             template_birth_PID = min(calibrated_birth_PID_list)
@@ -74,6 +86,15 @@ class process_publisher:
     def crossmatch(self,sky_id,dep_PIDs = []):
         param_dict = {'sky_id': sky_id}
         return self.publish_CMD(self.default_site_id, self.default_group_id, f'crossmatch|{param_dict}', dep_PIDs)
+    
+    def extract_flux(self,PID_img,PID_detect_source):
+        PID_img = int(PID_img)
+        PID_detect_source = int(PID_detect_source)
+        param_dict = {
+            'PID_img': PID_img,
+            'PID_detect_source': PID_detect_source
+        }
+        return self.publish_CMD(self.default_site_id, self.default_group_id, f'extract_flux|{param_dict}', [PID_img,PID_detect_source])
     def calibrate_observation(self,obs_id,PID_sub,PID_div):
         sql = 'SELECT birth_process_id FROM img WHERE obs_id = %s and n_stack=1 and image_type_id=1;'
         args = (obs_id,)

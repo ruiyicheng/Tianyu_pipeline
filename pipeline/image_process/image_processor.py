@@ -44,35 +44,86 @@ class image_processor:
         return res_query
 
 
-    def extract_flux(self, PID,image_PID, template_source_PID):
+    def extract_flux(self, PID,image_PID, template_source_PID, n_margin_pixels = 30, show = False):
         # 获取图像数据
         sql = "SELECT * FROM img WHERE birth_process_id = %s;"
         args = (image_PID,)
         img_this = self.sql_interface.query(sql, args)
         
-        sql = "SELECT tsp.source_id as source_id, tsp.x_template as x_template,tsp.y_template as y_template, sim.image_id as image_id, sim.absolute_deviation_x as deviation_x, sim.absolute_deviation_y as deviation_y FROM tianyu_source_position as tsp INNER JOIN sky_image_map as sim ON sim.template_img_id =tsp.image_id WHERE sim.process_id = %s"
+        sql = "SELECT tsp.source_id as source_id, tsp.x_template as x_template,tsp.y_template as y_template, sim.image_id as image_id, sim.absolute_deviation_x as deviation_x, sim.absolute_deviation_y as deviation_y FROM tianyu_source_position as tsp INNER JOIN sky_image_map as sim ON sim.image_id =tsp.template_img_id WHERE sim.process_id = %s"
         args = (template_source_PID,)
-        star_template = self.sql_interface.query() 
+        star_template = self.sql_interface.query(sql,args) 
         print(star_template)
+        
         assert len(img_this) == 1
         img_id_this = int(img_this.loc[0,'image_id'])
         path_first_file, name_first_file = self.fs.get_dir_for_object("img", {"image_id": img_id_this})
         img_path = f"{path_first_file}/{name_first_file}"
-        img_data = fits.getdata(img_path).byteswap().newbyteorder()
+        img_data = fits.getdata(img_path)
+        max_y_img = img_data.shape[0]
+        max_x_img = img_data.shape[1]
         # 获取背景
-        bkg = sep.Background(img_data)
+        print(img_data.shape)
+        bkg = sep.Background(img_data.astype(np.float32))
         bkgrms = bkg.rms()
-
+        print(img_this)
         x_in_template = np.array(star_template['x_template'].values)-np.array(star_template['deviation_x'])-int(img_this.loc[0,'x_to_template'])
         y_in_template = np.array(star_template['y_template'].values)-np.array(star_template['deviation_y'])-int(img_this.loc[0,'y_to_template'])
 
         # 10 20 30 can be decided by ml model
+        img_data = img_data.byteswap().newbyteorder()
         flux, fluxerr, flag = sep.sum_circle(img_data, x_in_template,y_in_template,10.0, err=bkgrms,bkgann = (20,30))
 
 
+        if show:
+            from matplotlib.patches import Ellipse
+            import matplotlib.pyplot as plt
+            # plot background-subtracted image
+            fig, ax = plt.subplots()
+            m, s = np.mean(img_data), np.std(img_data)
+            im = ax.imshow(img_data, interpolation='nearest', cmap='gray',
+                        vmin=m-3*s, vmax=m+3*s, origin='lower')
 
-        print(star_template)
-        print(img_this)
+            # plot an ellipse for each object
+            # for i in range(len(x_in_template)):
+            #     e = Ellipse(xy=(x_in_template[i], y_in_template[i]),
+            #                 width=10+1.5*flux[i],
+            #                 height=10+1.5*flux[i],
+            #                 angle=0)
+            #     e.set_facecolor('none')
+            #     e.set_edgecolor('red')
+            #     ax.add_artist(e)
+            i= 1922
+            print(f'position={np.array(star_template['x_template'].values)[i]}  {np.array(star_template['y_template'].values)[i]}')
+            e = Ellipse(xy=(x_in_template[i], y_in_template[i]),
+                        width=50*flux[i],
+                        height=50*flux[i],
+                        angle=0)
+            e.set_facecolor('none')
+            e.set_edgecolor('green')
+            ax.add_artist(e)
+            plt.show()
+            print(star_template)
+            print(img_this)
+        
+        
+        # writing the flux into db not consider marginal results
+        sql = "SELECT * FROM star_pixel_img where image_id = %s;"
+        args = (int(star_template.loc[0,'image_id']),) 
+        results = self.sql_interface.query(sql,args)
+        print(results)
+        results_source = set([])
+        if len(results)>0:
+            results_source = results['source_id']
+        for i in range(len(x_in_template)):
+            if x_in_template[i]>max_x_img-n_margin_pixels or x_in_template[i]<n_margin_pixels or y_in_template[i]>max_y_img-n_margin_pixels or y_in_template[i]<n_margin_pixels:
+                continue
+
+            if not int(star_template.loc[i,'source_id']) in results_source:
+                sql = "INSERT INTO star_pixel_img (image_id, source_id, flux_raw, flux_raw_error, birth_process_id) VALUES (%s,%s,%s,%s,%s);"
+                args = (int(star_template.loc[i,'image_id']),int(star_template.loc[i,'source_id']), flux[i],fluxerr[i],PID)
+                self.sql_interface.execute(sql,args)
+                #print(args)
 
         return 1
 

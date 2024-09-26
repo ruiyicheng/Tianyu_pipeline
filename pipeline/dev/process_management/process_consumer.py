@@ -107,6 +107,10 @@ class process_consumer:
             success = self.image_processor.detect_source_in_template(PID,par["sky_id"],as_new_template = par["as_new_template"])
         if cmd == "crossmatch":
             success = self.calibrator.crossmatch_external(par['sky_id'])
+        if cmd == "extract_flux":
+            success = self.image_processor.extract_flux(PID,par['PID_img'],par['PID_detect_source'])
+        #if cmd == "extract_flux":
+
         #time.sleep(0.5)
         #return 0
         if success:
