@@ -212,4 +212,13 @@ ORDER BY
         
     def relative_photometric_calibration(self,PID,PID_reference,PID_flux_extraction):
         # load database
-        pass
+        sql = "SELECT * FROM reference_star INNER JOIN tianyu_source_position as tsp on reference_star.source_id = tsp.source_id WHERE process_id = %s;"
+        args = (PID_reference,)
+        result = self.sql_interface.query(sql,args)
+        reference_star_source_id = np.array(result['source_id'],dtype = int)
+        sql = "SELECT * FROM star_pixel_img where birth_process_id = %s;"
+        args = (PID_flux_extraction,)
+        raw_flux = self.sql_interface.query(sql,args)
+        print(result)
+        print(raw_flux)
+

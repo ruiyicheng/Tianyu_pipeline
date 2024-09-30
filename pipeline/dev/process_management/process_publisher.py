@@ -28,6 +28,12 @@ class process_publisher:
 
     #     pid_cal_list = self.calibrate_observation(obs_id,PID_sub,PID_div)
     #     self.generate_template(pid_cal_list,sky_id)
+    def select_reference_star(self,PID_template_generating):
+        param_dict = {
+            'PID_template_generating': PID_template_generating
+        }
+        return self.publish_CMD(self.default_site_id, self.default_group_id, f'select_reference_star|{param_dict}', [PID_template_generating])
+    
     def extract_flux_batch(self,obs_id, resolve_id,nstack = 1):
         if nstack==1:
             image_type_id = 2
