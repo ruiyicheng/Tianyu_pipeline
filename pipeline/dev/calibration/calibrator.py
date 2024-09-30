@@ -178,7 +178,7 @@ ORDER BY
         return 1
     def absolute_photometric_calibration(self):
         pass
-    def choose_reference_star(self,template_generation_PID,dis_quantile_threshold = 0.5, minimum_marginal_deviation = 200):
+    def choose_reference_star(self,PID,template_generation_PID,dis_quantile_threshold = 0.5, minimum_marginal_deviation = 200):
         # load database, find best reference star
         sql = "SELECT * FROM sky_image_map WHERE process_id = %s;"
         args = (template_generation_PID,)
@@ -186,7 +186,7 @@ ORDER BY
         assert len(result)==1
         image_id = result.loc[0,'image_id']
         sql = "SELECT * FROM tianyu_source_position WHERE template_img_id = %s;"
-        args = (image_id,)
+        args = (int(image_id),)
         result = self.sql_interface.query(sql,args)
         x_template = np.array(result['x_template'])
         y_template = np.array(result['y_template'])
@@ -196,16 +196,20 @@ ORDER BY
         dis_threshold = np.quantile(distance[:,1],dis_quantile_threshold)
         reference_star_indices = np.where((distance[:,1] < dis_threshold)&center_star_mask)
         reference_star_source_id = result.loc[reference_star_indices,'source_id']
-        sql = "SEELCT * FROM img where image_id = %s;"
-        args = (image_id,)
+        sql = "SELECT * FROM img where image_id = %s;"
+        args = (int(image_id),)
         result = self.sql_interface.query(sql,args)
         obs_id = result.loc[0,'obs_id']
-        print(reference_star_source_id,'\n',obs_id)
+        sql = "INSERT INTO reference_star (obs_id, source_id, process_id) VALUES (%s,%s,%s);"
+        args = [(obs_id,int(i),PID) for i in reference_star_source_id]
+        self.sql_interface.executemany(sql,args)
+        # print(reference_star_source_id,'\n',obs_id)
+        # print(sql,args)
         #return {'reference_id':reference_star_source_id,"reference_x":x_template[reference_star_indices],"reference_y":y_template[reference_star_indices]}
 
-
+        return 1
 
         
-    def relative_photometric_calibration(self,PID,PID_template_generation,PID_flux_extraction_list):
+    def relative_photometric_calibration(self,PID,PID_reference,PID_flux_extraction):
         # load database
         pass
