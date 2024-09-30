@@ -30,22 +30,23 @@ class calibrator:
         self.sql_interface = sql_interface.sql_interface()
     def astrometric_calibration(self):
         pass
+    def find_nearest_kdtree(self,x1, y1, x2, y2):
+        # input: x1, y1, x2, y2
+        # output: nearest_indices, distances
+        # x1.shape = y1.shape
+        # x2.shape = y2.shape
+        # output.shape = x1.shape
+        # function: find the nearest point in x2, y2 for each point in x1, y1
+        # used for matching the sources in template image and target image
+        # 构建KDTree
+        from scipy.spatial import cKDTree
+        tree = cKDTree(np.c_[x2, y2])
+        
+        # 查找最近点的索引和距离
+        distances, nearest_indices = tree.query(np.c_[x1, y1], k=[1,2,3])
+        return distances, nearest_indices
     def crossmatch_external(self,sky_id, show = False):
-        def find_nearest_kdtree(x1, y1, x2, y2):
-            # input: x1, y1, x2, y2
-            # output: nearest_indices, distances
-            # x1.shape = y1.shape
-            # x2.shape = y2.shape
-            # output.shape = x1.shape
-            # function: find the nearest point in x2, y2 for each point in x1, y1
-            # used for matching the sources in template image and target image
-            # 构建KDTree
-            from scipy.spatial import cKDTree
-            tree = cKDTree(np.c_[x2, y2])
-            
-            # 查找最近点的索引和距离
-            distances, nearest_indices = tree.query(np.c_[x1, y1], k=[1,2,3])
-            return distances, nearest_indices
+
         # 3 steps
         # 1 obtain archive star
         # 2 find Gaia star
@@ -130,7 +131,7 @@ ORDER BY
         x2 = np.squeeze(pixels[:,0])
         y2 = np.squeeze(pixels[:,1])
         
-        distances, indices = find_nearest_kdtree(x1,y1,x2,y2)
+        distances, indices = self.find_nearest_kdtree(x1,y1,x2,y2)
         distances = distances * solution.best_match().scale_arcsec_per_pixel
 
         single_match = ((distances[:,1]/distances[:,0])>1.5) & (distances[:,0]<4)
@@ -175,5 +176,36 @@ ORDER BY
             #plt.scatter(np.squeeze(distances[:,0])[kmeans.labels_==2],np.squeeze(distances[:,1])[kmeans.labels_==2])
             plt.show()
         return 1
-    def photometric_calibration(self):
+    def absolute_photometric_calibration(self):
+        pass
+    def choose_reference_star(self,template_generation_PID,dis_quantile_threshold = 0.5, minimum_marginal_deviation = 200):
+        # load database, find best reference star
+        sql = "SELECT * FROM sky_image_map WHERE process_id = %s;"
+        args = (template_generation_PID,)
+        result = self.sql_interface.query(sql,args)
+        assert len(result)==1
+        image_id = result.loc[0,'image_id']
+        sql = "SELECT * FROM tianyu_source_position WHERE template_img_id = %s;"
+        args = (image_id,)
+        result = self.sql_interface.query(sql,args)
+        x_template = np.array(result['x_template'])
+        y_template = np.array(result['y_template'])
+        flux_template = np.array(result['flux_template'])
+        center_star_mask = (x_template<np.max(x_template)-minimum_marginal_deviation)&(x_template>minimum_marginal_deviation)&(y_template<np.max(y_template)-minimum_marginal_deviation)&(y_template>minimum_marginal_deviation)
+        distance, index = self.find_nearest_kdtree(x_template,y_template,x_template,y_template)
+        dis_threshold = np.quantile(distance[:,1],dis_quantile_threshold)
+        reference_star_indices = np.where((distance[:,1] < dis_threshold)&center_star_mask)
+        reference_star_source_id = result.loc[reference_star_indices,'source_id']
+        sql = "SEELCT * FROM img where image_id = %s;"
+        args = (image_id,)
+        result = self.sql_interface.query(sql,args)
+        obs_id = result.loc[0,'obs_id']
+        print(reference_star_source_id,'\n',obs_id)
+        #return {'reference_id':reference_star_source_id,"reference_x":x_template[reference_star_indices],"reference_y":y_template[reference_star_indices]}
+
+
+
+        
+    def relative_photometric_calibration(self,PID,PID_template_generation,PID_flux_extraction_list):
+        # load database
         pass
