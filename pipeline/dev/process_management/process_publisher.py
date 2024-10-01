@@ -28,6 +28,23 @@ class process_publisher:
 
     #     pid_cal_list = self.calibrate_observation(obs_id,PID_sub,PID_div)
     #     self.generate_template(pid_cal_list,sky_id)
+
+    def relative_photometry_batch(self,obs_id):
+        sql = "SELECT * FROM reference_star where obs_id = %s LIMIT 1;"
+        args = (obs_id,)
+        result = self.sql_interface.query(sql,args)
+        PID_reference_star = int(result.loc[0,'process_id'])
+        sql = "SELECT sim.birth_process_id as process_id FROM star_pixel_img as sim INNER JOIN img on img.image_id = sim.image_id where img.obs_id = %s;"
+        result = self.sql_interface.query(sql,args)
+        PID_extract_flux_list = list(set([int(i) for i in result['process_id']]))
+        for PID_extract_flux in PID_extract_flux_list:
+            self.relative_photometry(PID_reference_star,PID_extract_flux)
+    def relative_photometry(self,PID_reference_star,PID_extract_flux):
+        param_dict = {
+            'PID_reference_star': PID_reference_star,
+            'PID_extract_flux':PID_extract_flux
+        }
+        return self.publish_CMD(self.default_site_id, self.default_group_id, f'relative_photometry|{param_dict}', [PID_reference_star,PID_extract_flux])
     def select_reference_star(self,PID_template_generating):
         param_dict = {
             'PID_template_generating': PID_template_generating

@@ -107,10 +107,12 @@ class process_consumer:
             success = self.image_processor.detect_source_in_template(PID,par["sky_id"],as_new_template = par["as_new_template"])
         if cmd == "crossmatch":
             success = self.calibrator.crossmatch_external(par['sky_id'])
-        if cmd == "crossmatch":
-            success = self.calibrator.crossmatch_external(PID,par['PID_template_generating'])
+        if cmd == "select_reference_star":
+            success = self.calibrator.select_reference_star(PID,par['PID_template_generating'])
         if cmd == "extract_flux":
             success = self.image_processor.extract_flux(PID,par['PID_img'],par['PID_detect_source'])
+        if cmd == "relative_photometry":
+            success = self.calibrator.relative_photometric_calibration(PID,par['PID_reference_star'],par['PID_extract_flux'])
         #if cmd == "extract_flux":
 
         #time.sleep(0.5)

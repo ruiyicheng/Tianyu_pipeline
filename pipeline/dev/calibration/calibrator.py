@@ -179,7 +179,7 @@ ORDER BY
         return 1
     def absolute_photometric_calibration(self):
         pass
-    def choose_reference_star(self,PID,template_generation_PID,dis_quantile_threshold = 0.5, minimum_marginal_deviation = 200):
+    def select_reference_star(self,PID,template_generation_PID,dis_quantile_threshold = 0.5, minimum_marginal_deviation = 200):
         # load database, find best reference star
         sql = "SELECT * FROM sky_image_map WHERE process_id = %s;"
         args = (template_generation_PID,)
@@ -191,45 +191,105 @@ ORDER BY
         result = self.sql_interface.query(sql,args)
         x_template = np.array(result['x_template'])
         y_template = np.array(result['y_template'])
-        flux_template = np.array(result['flux_template'])
+        #flux_template = np.array(result['flux_template'])
         center_star_mask = (x_template<np.max(x_template)-minimum_marginal_deviation)&(x_template>minimum_marginal_deviation)&(y_template<np.max(y_template)-minimum_marginal_deviation)&(y_template>minimum_marginal_deviation)
         distance, index = self.find_nearest_kdtree(x_template,y_template,x_template,y_template)
         dis_threshold = np.quantile(distance[:,1],dis_quantile_threshold)
-        reference_star_indices = np.where((distance[:,1] < dis_threshold)&center_star_mask)
+        reference_star_indices = np.where((distance[:,1] > dis_threshold)&center_star_mask)
         reference_star_source_id = result.loc[reference_star_indices,'source_id']
         sql = "SELECT * FROM img where image_id = %s;"
         args = (int(image_id),)
         result = self.sql_interface.query(sql,args)
         obs_id = result.loc[0,'obs_id']
         sql = "INSERT INTO reference_star (obs_id, source_id, process_id) VALUES (%s,%s,%s);"
-        args = [(obs_id,int(i),PID) for i in reference_star_source_id]
+        args = [(int(obs_id),int(i),int(PID)) for i in reference_star_source_id]
+        #print(len(args))
         self.sql_interface.executemany(sql,args)
         # print(reference_star_source_id,'\n',obs_id)
-        # print(sql,args)
+        print(sql,args)
         #return {'reference_id':reference_star_source_id,"reference_x":x_template[reference_star_indices],"reference_y":y_template[reference_star_indices]}
 
         return 1
 
         
-    def relative_photometric_calibration(self,PID,PID_reference,PID_flux_extraction,flux_quantile_number = 5,pos_quantile_number = 3):
-        
+    def relative_photometric_calibration(self,PID,PID_reference,PID_flux_extraction,flux_quantile_number = 10,pos_quantile_number = 3):
+        def mask_select(df,item,bins,index):
+            if index ==0:
+                mask = df[item]<=bins[1]
+                return mask
+            if index == len(bins)-1:
+                mask = df[item]>bins[-2]
+                return mask
+            mask = (df[item]>bins[index]) & (df[item]<=bins[index+1])
+            return mask
         # load database
-        sql = "SELECT * FROM reference_star INNER JOIN tianyu_source_position as tsp on reference_star.source_id = tsp.source_id WHERE process_id = %s;"
+        sql = "SELECT reference_star.source_id as source_id, tsp.template_img_id as template_img_id, tsp.x_template as x_template, tsp.y_template as y_template, tsp.flux_template as flux_template FROM reference_star INNER JOIN tianyu_source_position as tsp on reference_star.source_id = tsp.source_id WHERE reference_star.process_id = %s;"
         args = (PID_reference,)
         reference_star = self.sql_interface.query(sql,args)
-        #
+
+        #print(reference_star.columns)
         template_id = int(reference_star.loc[0,'template_img_id'])
         sql = "SELECT * FROM tianyu_source_position WHERE template_img_id = %s;"
         args = (template_id,)
         all_star = self.sql_interface.query(sql,args)
         #reference_star_source_id = np.array(reference_star['source_id'],dtype = int)
-        sql = "SELECT * FROM star_pixel_img as spi INNER JOIN tianyu_source_position as tsp on spi.source_id = tsp.source_id where spi.birth_process_id = %s;"
+        sql = "SELECT spi.star_pixel_img_id as star_pixel_img_id, spi.source_id as source_id, spi.flux_raw as flux_raw, spi.flux_raw_error as flux_raw_error, tsp.x_template as x_template, tsp.y_template as y_template, tsp.flux_template as flux_template  FROM star_pixel_img as spi INNER JOIN tianyu_source_position as tsp on spi.source_id = tsp.source_id where spi.birth_process_id = %s;"
         args = (PID_flux_extraction,)
         raw_flux = self.sql_interface.query(sql,args)
         # Group reference stars by quantile of flux
-        reference_star['flux_quantile'] = pd.qcut(reference_star['flux_template'], flux_quantile_number, labels=False)
-        raw_flux['flux_quantile'] = pd.qcut(raw_flux['flux_template'], flux_quantile_number, labels=False) 
-        raw_flux['pos_quantile'] = pd.qcut(raw_flux['x_template'], pos_quantile_number, labels=False)
+        all_star['flux_quantile'],bin_flux = pd.qcut(all_star['flux_template'], flux_quantile_number, labels=False,retbins=True)
+        all_star['x_quantile'],bin_x = pd.qcut(all_star['x_template'], pos_quantile_number, labels=False,retbins=True) 
+        all_star['y_quantile'],bin_y = pd.qcut(all_star['y_template'], pos_quantile_number, labels=False,retbins=True)
+
+        # print(reference_star.columns)
+        # print(all_star.columns)
+        # print(raw_flux.columns)
+        args_calibration = []
+        for index_flux in range(len(bin_flux)-1):
+            for index_bin_x in range(len(bin_x)-1):
+                for index_bin_y in range(len(bin_y)-1):
+                    mask_flux_reference = mask_select(reference_star,'flux_template',bin_flux,index_flux)
+                    mask_x_reference = mask_select(reference_star,'x_template',bin_x,index_bin_x)
+                    mask_y_reference = mask_select(reference_star,'y_template',bin_y,index_bin_y)
+                    mask_reference = mask_flux_reference & mask_x_reference & mask_y_reference
+                    reference_star_this_bin = reference_star[mask_reference]
+                    mask_flux_raw = mask_select(raw_flux,'flux_template',bin_flux,index_flux)
+                    mask_x_raw = mask_select(raw_flux,'x_template',bin_x,index_bin_x)
+                    mask_y_raw = mask_select(raw_flux,'y_template',bin_y,index_bin_y)
+                    mask_raw = mask_flux_raw & mask_x_raw & mask_y_raw
+                    raw_flux_this_bin = raw_flux[mask_raw]
+                    
+                    reference_flux = pd.merge(raw_flux_this_bin,reference_star_this_bin,how = 'inner',on = 'source_id')
+                    reference_flux.rename(columns={'flux_raw': 'flux_raw_reference', 'flux_raw_error': 'flux_raw_error_reference','star_pixel_img_id':'pixel_id'},inplace = True)
+                    #print(reference_flux.columns)
+                    join_flux = pd.merge(raw_flux_this_bin,reference_flux,how = 'left',on = 'source_id')
+                    
+                    join_flux_filled = join_flux.fillna(0)
+                    is_reference = ~join_flux['flux_raw_reference'].isna()
+                    num_reference = len(reference_flux)
+
+                    average_reference = (np.sum(join_flux_filled['flux_raw_reference'])-np.array(join_flux_filled['flux_raw_reference']))/(num_reference-np.array(is_reference,dtype = int))
+                    join_flux['relative_flux'] = join_flux['flux_raw']/average_reference
+                    join_flux['relative_flux_error'] = join_flux['flux_raw_error']/average_reference
+                    #print(join_flux)
+                    for i,r in join_flux.iterrows():
+                        args_calibration.append((float(r['relative_flux']),float(r['relative_flux_error']),PID,int(r['star_pixel_img_id'])))
+        
+        sql = "UPDATE star_pixel_img SET flux_relative = %s,flux_relative_error = %s, relative_process_id = %s where star_pixel_img_id = %s; "
+        self.sql_interface.executemany(sql,args_calibration)
+        return 1
+                    # print(~join_flux['flux_raw_reference'].isna())
+                    # print(join_flux['flux_raw'])
+                    # print(reference_flux)
+                    # plt.scatter(raw_flux_this_bin['x_template'],raw_flux_this_bin['y_template'])
+                    # plt.scatter(reference_flux['x_template_x'],reference_flux['y_template_x'])
+                    # plt.show()
+                    #eference_star_this_bin = reference_star[(reference_star['flux_template']>=bin_flux[index_flux]-epsilon)&(reference_star['flux_template']<bin_flux[index_flux+1])&(reference_star['flux_template']>=bin_flux[index_flux]-epsilon)&(reference_star['flux_template']<bin_flux[index_flux+1])]
+        # print(all_star)
+        # print(raw_flux)
+        # print(bin_flux)
+        # print(bin_x)
+        # print(bin_y)
 
 
         
