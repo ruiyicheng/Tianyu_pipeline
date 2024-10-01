@@ -7,6 +7,7 @@ import glob
 from tqdm import tqdm
 import time
 import sep
+import pandas as pd
 from astropy.stats import sigma_clip 
 import Tianyu_pipeline.pipeline.utils.sql_interface as sql_interface
 import Tianyu_pipeline.pipeline.utils.data_loader as data_loader
@@ -210,15 +211,25 @@ ORDER BY
         return 1
 
         
-    def relative_photometric_calibration(self,PID,PID_reference,PID_flux_extraction):
+    def relative_photometric_calibration(self,PID,PID_reference,PID_flux_extraction,flux_quantile_number = 5,pos_quantile_number = 3):
+        
         # load database
         sql = "SELECT * FROM reference_star INNER JOIN tianyu_source_position as tsp on reference_star.source_id = tsp.source_id WHERE process_id = %s;"
         args = (PID_reference,)
-        result = self.sql_interface.query(sql,args)
-        reference_star_source_id = np.array(result['source_id'],dtype = int)
-        sql = "SELECT * FROM star_pixel_img where birth_process_id = %s;"
+        reference_star = self.sql_interface.query(sql,args)
+        #
+        template_id = int(reference_star.loc[0,'template_img_id'])
+        sql = "SELECT * FROM tianyu_source_position WHERE template_img_id = %s;"
+        args = (template_id,)
+        all_star = self.sql_interface.query(sql,args)
+        #reference_star_source_id = np.array(reference_star['source_id'],dtype = int)
+        sql = "SELECT * FROM star_pixel_img as spi INNER JOIN tianyu_source_position as tsp on spi.source_id = tsp.source_id where spi.birth_process_id = %s;"
         args = (PID_flux_extraction,)
         raw_flux = self.sql_interface.query(sql,args)
-        print(result)
-        print(raw_flux)
+        # Group reference stars by quantile of flux
+        reference_star['flux_quantile'] = pd.qcut(reference_star['flux_template'], flux_quantile_number, labels=False)
+        raw_flux['flux_quantile'] = pd.qcut(raw_flux['flux_template'], flux_quantile_number, labels=False) 
+        raw_flux['pos_quantile'] = pd.qcut(raw_flux['x_template'], pos_quantile_number, labels=False)
 
+
+        
