@@ -389,7 +389,7 @@ ORDER BY
         #self.sql_interface.cnx.commit()
         self.sql_interface.execute(sql,arg)
         return 1
-    
+    #method = mean, median, flat_stacking (3median-2mean)
     def stacking(self,PID,site_id,method = "mean",PID_type = "birth",ret='success',par = {},consider_goodness = 0):
         
         def nanaverage(A,weights,axis):
@@ -465,8 +465,13 @@ ORDER BY
                 res = nanaverage(res_dict,weights_revised,axis = 0)
             if method == "median":
                 res = np.nanmedian(res_dict,axis = 0)
-            if method == "ZOGY":
-                pass
+            if method == "flat_stacking":
+                averages_picture = np.mean(res_dict, axis=(1, 2)).reshape(-1,1,1)
+                normalized_picture = res_dict/averages_picture
+                weights = 1/averages_picture #sigma^2 proportional to 1/flux due to Poisson noise
+                mean = nanaverage(normalized_picture,weights_revised,axis = 0)
+                median = np.nanmedian(normalized_picture,axis = 0)
+                res = 3*median-2*mean
 
             res = res.astype(np.float32)
             new_name = f"n_{int(np.sum(n_stack_list))}_PID_{PID}_from_{name_first_file.split('from_')[-1]}"

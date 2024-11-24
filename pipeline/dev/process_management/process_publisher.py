@@ -226,7 +226,7 @@ class process_publisher:
         return PID_this
 
 
-    def stacking(self,PIDs,PID_type='birth',num_image_limit = 5,consume_site_id=-1,consume_group_id=-1,consider_goodness=0,additional_dependence_list = []):
+    def stacking(self,PIDs,PID_type='birth',method = 'mean',num_image_limit = 5,consume_site_id=-1,consume_group_id=-1,consider_goodness=0,additional_dependence_list = []):
         PIDs = [int(p) for p in PIDs]
         additional_dependence_list = [int(p) for p in additional_dependence_list]
         if consume_site_id==-1:
@@ -237,13 +237,13 @@ class process_publisher:
         for i in range((len(PIDs)-1)//num_image_limit+1):
             stack_this = PIDs[i*num_image_limit:(i+1)*num_image_limit]
             if len(stack_this)!=1:
-                PID_this = self.publish_CMD(consume_site_id,consume_group_id,'stack|{"PID_type":"'+PID_type+'","consider_goodness":'+str(consider_goodness)+'}',stack_this+additional_dependence_list)
+                PID_this = self.publish_CMD(consume_site_id,consume_group_id,'stack|{"PID_type":"'+PID_type+'","consider_goodness":'+str(consider_goodness)+'","method":'+method+'}',stack_this+additional_dependence_list)
                 Next_hierarchy_PID_list.append(PID_this)
             else:
                 Next_hierarchy_PID_list.append(stack_this[0])
 
         if len(Next_hierarchy_PID_list)>1:
-            PID_ret = self.stacking(Next_hierarchy_PID_list,num_image_limit=num_image_limit,consume_site_id=consume_site_id,consume_group_id=consume_group_id,consider_goodness=consider_goodness)
+            PID_ret = self.stacking(Next_hierarchy_PID_list,method = method,num_image_limit=num_image_limit,consume_site_id=consume_site_id,consume_group_id=consume_group_id,consider_goodness=consider_goodness)
         else:
             return PID_this
         return PID_ret
