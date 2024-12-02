@@ -1,4 +1,5 @@
 # Define the class of telescope hardware
+import os
 import numpy as np
 from astropy.time import Time
 import pandas as pd
@@ -79,7 +80,7 @@ class camera(hardware):
             print('Camera is busy')
             return 0
         if 'simulator' in self.name:
-            print('Image is loaded')
+            # print('Image is loaded')
             return generated_img
 
 # tracking_mode, tracking_speed_deg_s_1, stable_time_s, goto_error_arcsec, tracking_error_arcsec_min_1
@@ -132,7 +133,13 @@ class telescope:
         if not hasattr(self, '_position'):
             self._position = EarthLocation.from_geodetic(lat=self.latlonalt[0]*u.deg, lon=self.latlonalt[1]*u.deg, height=self.latlonalt[2]*u.m)
         return self._position
-
+    @property
+    def Altaz_obs(self):
+        return AltAz(obstime=self.world.time_astropy, location=self.position)
+    @property
+    def pointing(self):
+        return SkyCoord(ra=self.mount.ra_deg*u.deg, dec=self.mount.dec_deg*u.deg, obstime=self.world.time_astropy, frame='gcrs', location=self.world.telescope.position)
+    
     @property
     def wcs(self,rot_deg = 0):
         theta = rot_deg/180*np.pi
@@ -190,12 +197,14 @@ class world:
         else:
             self._time = Time.now().jd
             return self._time
-
+    @property
+    def time_astropy(self):
+        return Time(self.time,scale = 'utc',format = 'jd',location = self.telescope.position)
     
     def load_event(self,fp,type):
         pass
 
-    def run_sim(self):
+    def run_sim(self,out = '/Users/ruiyicheng/Documents/code/projects/TianYu/debug_Tianyu_file_system/image/testsim'):
         def wait_to_ok(device):
             epsilon = 1e-9
             if device.status == 'busy':
@@ -205,6 +214,7 @@ class world:
         
         if not 'simulator' in self.name:
             raise   RuntimeError('Simulator only works in simulator world')
+        ct_name = {}
         for i,r in self.schedule.iterrows():
             if self.time > r['jd_utc_end']:
                 continue
@@ -227,13 +237,15 @@ class world:
                         
                     self.telescope.mount.goto(ra, dec)
                 self._time = wait_to_ok(self.telescope.mount)
-                ct = 0
-                while self.time < r['jd_utc_end'] and (r['n_max_frames']<=0 or ct< r['n_max_frames']):
-                    ct += 1
+                ct_name[r['target_name']] = 0
+                while self.time < r['jd_utc_end'] and (r['n_max_frames']<=0 or ct_name[r['target_name']]< r['n_max_frames']):
+                    ct_name[r['target_name']] += 1
                     self.telescope.camera.capture(r['exposure_s'])
                     self._time = wait_to_ok(self.telescope.camera)
-                    image = self.telescope.camera.download(self.img_simulator.generate_img())
-                    
+                    image = self.telescope.camera.download(self.img_simulator.generate_img(is_bias= 'bias' in r['target_name']))
+                    header = fits.Header()
+                    header['JD'] = self.time
+                    fits.writeto(out+'/'+r['target_name']+'-'+str(ct_name[r['target_name']]) + '.fits',image,overwrite=True,header = header)
                     print(r['target_name'],'captured at',self.time)
                     self._time = self._time + r['delay_between_frame_s']/24/3600
                 # preprocessing image (cut pixel, stacking)
@@ -358,7 +370,7 @@ class image_simulator:
         flat_co = cv2.resize(flat_re.astype(np.float32), (image.shape[0], image.shape[1]), interpolation=cv2.INTER_LINEAR) 
         flat_co /= np.mean(flat_co)
         return flat_co
-    def sky(self,img):# to simplify the problem, we set the image to align with dec axis
+    def sky(self,img,bias = False):# to simplify the problem, we set the image to align with dec axis
         def get_direction(ra1,dec1,ra2,dec2):
             ra1_rad = ra1 * np.pi / 180
             dec1_rad = dec1 * np.pi / 180
@@ -390,6 +402,7 @@ class image_simulator:
             def X(Z):
                 Z_rad = Z*np.pi/180
                 return (1-0.96*np.sin(Z_rad)**2)**(-0.5)
+
             K = 0.23
             m = -12.73+0.026*np.abs(alpha)+4*10**(-9)*alpha**4
             I_star = 10**(-0.4*(m+16.57))
@@ -397,26 +410,26 @@ class image_simulator:
             V_moon = (20.7233-np.log(B_moon/34.08))/0.92104
             return V_moon
         
-        time = Time(self.world.time,scale = 'utc',format = 'jd')
+        if bias: 
+            return 0
         # get moon phase
-        Altaz_obs = AltAz(obstime=time, location=self.world.telescope.position)
-        sun = get_body('sun',time)#.transform_to(Altaz_obs)
-        moon = get_body('moon',time)#.transform_to(Altaz_obs)
+        sun = get_body('sun',self.world.time_astropy)#.transform_to(Altaz_obs)
+        moon = get_body('moon',self.world.time_astropy)#.transform_to(Altaz_obs)
         # Compute elongation (angular separation between Sun and Moon)
         
-        elongation = sun.transform_to(Altaz_obs).separation(moon.transform_to(Altaz_obs)).deg  
+        elongation = sun.transform_to(self.world.telescope.Altaz_obs).separation(moon.transform_to(self.world.telescope.Altaz_obs)).deg  
         alpha = 180 - elongation
-        coord_pointing = SkyCoord(ra=self.world.telescope.mount.ra_deg*u.deg, dec=self.world.telescope.mount.dec_deg*u.deg, obstime=time, frame='gcrs', location=self.world.telescope.position)#
-        rho = coord_pointing.separation(moon).deg
-        Zm = 90-moon.transform_to(Altaz_obs).alt.deg
-        Z = 90-coord_pointing.transform_to(Altaz_obs).alt.deg
+        #coord_pointing = SkyCoord(ra=self.world.telescope.mount.ra_deg*u.deg, dec=self.world.telescope.mount.dec_deg*u.deg, obstime=self., frame='gcrs', location=self.world.telescope.position)#
+        rho = self.world.telescope.pointing.separation(moon).deg
+        Zm = 90-moon.transform_to(self.world.telescope.Altaz_obs).alt.deg
+        Z = 90-self.world.telescope.pointing.transform_to(self.world.telescope.Altaz_obs).alt.deg
         M_moon = moon_sky(rho,Z,Zm,alpha)
-        coord_pointing_ra_deviated = SkyCoord(ra=(self.world.telescope.mount.ra_deg+1/3600)*u.deg, dec=self.world.telescope.mount.dec_deg*u.deg, obstime=time, frame='gcrs', location=self.world.telescope.position)
-        coord_pointing_dec_deviated = SkyCoord(ra=self.world.telescope.mount.ra_deg*u.deg, dec=(self.world.telescope.mount.dec_deg+1/3600)*u.deg, obstime =time, frame='gcrs', location=self.world.telescope.position)
+        coord_pointing_ra_deviated = SkyCoord(ra=(self.world.telescope.mount.ra_deg+1/3600)*u.deg, dec=self.world.telescope.mount.dec_deg*u.deg, obstime=self.world.time_astropy, frame='gcrs', location=self.world.telescope.position)
+        coord_pointing_dec_deviated = SkyCoord(ra=self.world.telescope.mount.ra_deg*u.deg, dec=(self.world.telescope.mount.dec_deg+1/3600)*u.deg, obstime =self.world.time_astropy, frame='gcrs', location=self.world.telescope.position)
         rho_ra_deviated = coord_pointing_ra_deviated.separation(moon).deg
         rho_dec_deviated = coord_pointing_dec_deviated.separation(moon).deg
-        Z_ra_deviated = 90-coord_pointing_ra_deviated.transform_to(Altaz_obs).alt.deg
-        Z_dec_deviated = 90-coord_pointing_dec_deviated.transform_to(Altaz_obs).alt.deg
+        Z_ra_deviated = 90-coord_pointing_ra_deviated.transform_to(self.world.telescope.Altaz_obs).alt.deg
+        Z_dec_deviated = 90-coord_pointing_dec_deviated.transform_to(self.world.telescope.Altaz_obs).alt.deg
         M_moon_ra_deviated = moon_sky(rho_ra_deviated,Z_ra_deviated,Zm,alpha)    
         M_moon_dec_deviated = moon_sky(rho_dec_deviated,Z_dec_deviated,Zm,alpha)
         dMoon_dRA = (M_moon_ra_deviated-M_moon) #mag per arcsec
@@ -424,24 +437,24 @@ class image_simulator:
 
         # Compute the AltAz coordinates of the Sun/Moon
         
-        sun_altaz = sun.transform_to(Altaz_obs)
+        sun_altaz = sun.transform_to(self.world.telescope.Altaz_obs)
         sun_alt = sun_altaz.alt.deg
         sun_az = sun_altaz.az.deg
-        obs_az = coord_pointing.transform_to(Altaz_obs).az.deg
+        obs_az = self.world.telescope.pointing.transform_to(self.world.telescope.Altaz_obs).az.deg
         theta = (sun_az-obs_az)
         if theta<0:
             theta += 360
         sep_sun_obs_az = np.min(((360-theta),theta))#https://arxiv.org/pdf/1407.8283 
         G_Sun = -2.5/np.log(10)*10**(-0.005555*sep_sun_obs_az-1)/3600     # mag per arcsec
         M_sun = np.min([30,np.max([1,8-1.03*sun_alt])])#https://arxiv.org/pdf/1407.8283
-        racomp, deccomp = get_direction(coord_pointing.ra.deg,coord_pointing.dec.deg,sun.ra.deg,sun.dec.deg)
+        racomp, deccomp = get_direction(self.world.telescope.pointing.ra.deg,self.world.telescope.pointing.dec.deg,sun.ra.deg,sun.dec.deg)
         dSun_dRA = G_Sun*racomp
         dSun_dDEC = G_Sun*deccomp
         # print(f'sep to moon = {rho} deg; \nphase of Moon = {alpha}\nZenith distance of moon = {Zm}\nAzi of moon = {moon.transform_to(Altaz_obs).az.deg}\nAlt of moon = {moon.transform_to(Altaz_obs).alt.deg}')
         # print(f'pointing alt = {90-Z}; pointing az = {obs_az}')
         # print(f"Telescope RA: {coord_pointing.ra.deg}, DEC: {coord_pointing.dec.deg}")
         # print(f"Moon RA: {moon.ra.deg}, DEC: {moon.dec.deg}")
-        print(M_sun,sun_alt)
+        # print(M_sun,sun_alt)
         # print(dMoon_dRA,dMoon_dDEC,dSun_dRA,dSun_dDEC)
         ny, nx = img.shape
 
@@ -463,11 +476,13 @@ class image_simulator:
             plt.colorbar()
             plt.show()
         return c
-    def star(self,img,gaia_catalog = 'online', Gmag_limit = 18,alpha = 5):
+    def star(self,img,gaia_catalog = 'online', Gmag_limit = 18,alpha = 3,transit_catalog = os.path.dirname(os.path.realpath(__file__))+'/sim_events/transit.csv',bias = False):
+        if bias:
+            return 0
         if gaia_catalog == 'online':
             # Get the gaia source that is not galaxy
             sql = f'''
-            SELECT g3.source_id,g3.ra,g3.dec,g3.phot_g_mean_mag,g3.phot_g_mean_flux_over_error, g3.parallax,g3.pmra,g3.pmdec from gaiadr3.gaia_source as g3 LEFT JOIN 	
+            SELECT g3.source_id as source_id,g3.ra,g3.dec,g3.phot_g_mean_mag,g3.phot_g_mean_flux_error,g3.phot_g_n_obs,g3.phot_g_mean_flux, g3.phot_variable_flag,g3.parallax,g3.pmra,g3.pmdec from gaiadr3.gaia_source as g3 LEFT JOIN 	
 gaiadr3.galaxy_candidates as ggc ON ggc.source_id = g3.source_id
 WHERE g3.phot_g_mean_mag<{Gmag_limit} AND
 CONTAINS(
@@ -476,20 +491,88 @@ CONTAINS(
 )=1 AND ggc.source_id IS NULL AND g3.phot_g_mean_mag=g3.phot_g_mean_mag;'''      
             job = Gaia.launch_job_async(sql)
             r = job.get_results()
-        # Draw the image
+
+        # Get the magnitude of stars
+        mag_raw = r['phot_g_mean_mag']
+
+        # Get the magnitude error
+        total_electron_gaia = 4.42 * r['phot_g_n_obs'] * r['phot_g_mean_flux']
+        error_photometric = np.sqrt(total_electron_gaia)/r['phot_g_n_obs']
+        error_total = r['phot_g_mean_flux_error']
+        error_jitter = np.sqrt(np.maximum(0,error_total**2-error_photometric**2))
+        error_fraction_jitter = error_jitter/r['phot_g_mean_flux'] * (~(r['phot_variable_flag']=='VARIABLE')) # Variable star have larger error, process correspondingly 
+        error_fraction_jitter_sample = 1+error_fraction_jitter * np.random.randn(len(r))
+
+
+        CY=1.5
+        z = np.pi/2-self.world.telescope.pointing.transform_to(self.world.telescope.Altaz_obs).alt.rad
+        airmass = (1.002432*np.cos(z)**2+0.148386*np.cos(z)+0.0096467)/(np.cos(z)**3+0.149864*np.cos(z)**2+0.0102963*np.cos(z)+0.000303978) #https://opg.optica.org/ao/abstract.cfm?uri=ao-33-6-1108
+        scintillation = np.sqrt(10**(-5)*CY**2*np.array(self.world.telescope.diameter_m)**(-4/3)/(self.world.telescope.camera.exposure_s)*(airmass)**3*np.exp(-2*self.world.telescope.position.height.to(u.m)/8000/u.m))
+        print('scintillation=',scintillation)
+        error_scintillation = 1+scintillation * np.random.randn(len(r))
+
+        star_all = SkyCoord(ra=r['ra'], dec=r['dec'], obstime=self.world.time_astropy, frame='icrs', location=self.world.telescope.position)
+        z_all = np.pi/2-star_all.transform_to(self.world.telescope.Altaz_obs).alt.rad
+        airmass_all = (1.002432*np.cos(z_all)**2+0.148386*np.cos(z_all)+0.0096467)/(np.cos(z_all)**3+0.149864*np.cos(z_all)**2+0.0102963*np.cos(z_all)+0.000303978) #https://opg.optica.org/ao/abstract.cfm?uri=ao-33-6-1108
+        K = 0.23
+        luminosity_fraction_extinction = 10**(-0.4*(K*airmass_all))
+
         
-        
+        t_tdb_bjd = self.world.time_astropy.tdb.jd
+        # Consider the events of transits
+        transit_relative_flux = np.ones(mag_raw.shape)
+        if type(transit_catalog)==str:
+            transit_events = pd.read_csv(transit_catalog)
+            #sprint(transit_events)
+
+            for index,row in transit_events.iterrows():
+                if not row['dr3_source_id'] in r['SOURCE_ID']:
+                    continue
+                
+                target = r[r['SOURCE_ID']==row['dr3_source_id']]
+                
+                target_pos = SkyCoord(ra=target['ra'][0]*u.deg, dec=target['dec'][0]*u.deg, frame='gcrs',location=self.world.telescope.position)
+                ltt_bary = self.world.time_astropy.light_travel_time(target_pos)
+                
+                time_barycentre = t_tdb_bjd + ltt_bary  
+                # print(time_barycentre,time_barycentre)
+
+                # Use batman to generate the light curve
+                params = batman.TransitParams()
+                params.t0 = row['tm_tdb_bjd']                        #time of inferior conjunction
+                params.per = row['period_d']                       #orbital period
+                params.rp = row['radius_star_radius']                       #planet radius (in units of stellar radii)
+                params.a = row['semi_major_axis_stellar_radius']                       #semi-major axis (in units of stellar radii)
+                params.inc = row['inclination_deg']                     #orbital inclination (in degrees)
+                params.ecc = row['e']                      #eccentricity
+                params.w = 90.                        #longitude of periastron (in degrees)
+                params.limb_dark = "nonlinear"        #limb darkening model
+                params.u = [row['u05'], row['u1'], row['u15'], row['u2']]
+                m = batman.TransitModel(params, np.array([time_barycentre.jd]))
+                flux = m.light_curve(params)
+                transit_relative_flux[np.where(r['SOURCE_ID']==row['dr3_source_id'])] = flux
+        flux_prod = transit_relative_flux * error_scintillation * error_fraction_jitter_sample * luminosity_fraction_extinction
+        # Consider variable stars
+        delta_mag_var = 0
+
+
+
+
+        mag = mag_raw + delta_mag_var
+        #
         hnu = 4.82*6.62607015e-20
         FWHM = 1 / self.world.telescope.seeing_arcsec 
         gamma = FWHM / (2 * np.sqrt(2**(1/alpha) - 1))
-        flux = 870 * 10**(-0.4*(r['phot_g_mean_mag']+29))
+        flux = 870 * 10**(-0.4*(mag+29))
+
+
         normalize_factor =  (self.world.telescope.diameter_m/2)**2 * self.world.telescope.camera.exposure_s  * (alpha - 1)/ ( gamma**2 * hnu)
-        n_photon =  normalize_factor * flux
+        n_photon =  normalize_factor * flux * flux_prod
         image_star = np.zeros(img.shape)
         radec_star = np.array([[r['ra'][i],r['dec'][i]] for i in range(len(r))])
         pixcrd = self.world.telescope.wcs.wcs_world2pix(radec_star, 0)
-        print('Brightest star gmag', np.min(r['phot_g_mean_mag']))
-        print('at',pixcrd[np.argmin(r['phot_g_mean_mag'])])
+        # print('Brightest star gmag', np.min(r['phot_g_mean_mag']))
+        # print('at',pixcrd[np.argmin(r['phot_g_mean_mag'])])
         x0 = [item[0] for item in pixcrd]
         y0 = [item[1] for item in pixcrd]
         for x0, y0, A in zip(x0, y0, n_photon):
@@ -503,27 +586,27 @@ CONTAINS(
             g = Moffat2D(amplitude=A, x_0=x0, y_0=y0, gamma=gamma, alpha=alpha)
             image_star[y_min:y_max, x_min:x_max] += g(X_sub, Y_sub)
         return image_star
-    def generate_img(self):
+    def generate_img(self,is_bias = False):
         img = np.zeros((self.world.telescope.camera.pixel_number_x,self.world.telescope.camera.pixel_number_y))
-        print(img.shape)
+        #print(img.shape)
         dark = self.dark_current(img,self.world.telescope.camera.dark_current_e_s_1,self.world.telescope.camera.exposure_s)
         read_noise = self.read_noise(img,self.world.telescope.camera.read_noise_e)
         bias = self.bias(img,self.world.telescope.camera.bias_level)
         flat = self.flat(img)
-        sky = self.sky(img)
-        star = self.star(img)
+        sky = self.sky(img,bias = is_bias)
+        star = self.star(img, bias = is_bias)
         galaxy = 0
         other_events = 0
         print('exposure',self.world.telescope.camera.exposure_s)
         total_photoelectron = (sky + star + galaxy + other_events)*flat*self.world.telescope.camera.QE
-        total_photoelectron_variation = np.sqrt(total_photoelectron)*np.random.randn(*img.shape)
+        total_photoelectron_variation = np.sqrt(np.abs(total_photoelectron))*np.random.randn(*img.shape)
         total_electron = (dark + read_noise + total_photoelectron + total_photoelectron_variation) 
         total_electron = np.minimum(self.world.telescope.camera.full_well_capacity_ke*1000,total_electron)
         img =  total_electron / self.world.telescope.camera.gain + bias
         img = np.minimum(2**self.world.telescope.camera.bit_per_pixel-1, img)
 
 
-        if True:
+        if False:
             import matplotlib.pyplot as plt
             m = np.mean(img)
             s = np.std(img)
@@ -531,7 +614,7 @@ CONTAINS(
             plt.colorbar()
             plt.show()
 
-        print('mean',np.mean(img))
+        #print('mean',np.mean(img))
         return img
 
 if __name__ == '__main__':
