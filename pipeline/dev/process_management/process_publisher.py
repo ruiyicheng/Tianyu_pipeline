@@ -28,7 +28,38 @@ class process_publisher:
 
     #     pid_cal_list = self.calibrate_observation(obs_id,PID_sub,PID_div)
     #     self.generate_template(pid_cal_list,sky_id)
+    def process_TOO_obs(self,PID_bias,PID_flat,PID_raw,PID_sky): # Generate new sky template with the stacking results
+        # calibrate the raw image
+        sql = 'SELECT birth_process_id FROM img JOIN observation as obs on obs.obs_id = img.obs_id WHERE obs.process_id = %s and n_stack=1 and (img.image_type_id=1 or img.image_type_id=5 or img.image_type_id = 9 or img.image_type_id = 7);'
+        args = (PID_bias,)
+        PID_biases = self.sql_interface.query(sql,args)
+        args = (PID_flat,)
+        PID_flats = self.sql_interface.query(sql,args)
+        args = (PID_raw,)
+        sql = "SELECT obs_id from observation where obs.process_id = %s;"
+        obs_id_raw = self.sql_interface.query(sql,args)
+        PID_super_bias = self.stacking(list(PID_biases['birth_process_id']))
+        PID_flat_debiased_list = []
+        for pf in list(PID_flats['birth_process_id']):
+            flat_debiased_pid = self.calibrate({'PID_cal':pf,'PID_sub':PID_super_bias,'subtract_bkg':0})
+            PID_flat_debiased_list.append(flat_debiased_pid)
+        PID_super_flat = self.stacking(PID_flat_debiased_list,method = 'flat_stacking',num_image_limit=50)
+        PID_calibrated_img = self.calibrate_observation(obs_id_raw.loc['obs_id',0],PID_super_bias,PID_super_flat)
+        
+        # Generate new sky template with the stacking results
+        stacked_PID = self.align_stack_img(PID_calibrated_img)
+        # resolve targets
+        sql = 'select sky_id from sky where process_id = %s;'
+        args = (PID_sky,)
+        sky_id = self.sql_interface.query(sql,args).loc['sky_id',0]
+        resolve_star_pid = self.detect_source(stacked_PID,sky_id)
+        PID_reference_star = self.select_reference_star(resolve_star_pid)
+        PID_flux_batch = self.extract_flux_batch(obs_id_raw.loc['obs_id',0],resolve_star_pid)
+        relative_photometry_list = []
+        for PID_flux in PID_flux_batch:
+            relative_photometry_list.append(self.relative_photometry(PID_reference_star,PID_flux))
 
+        return relative_photometry_list
     def relative_photometry_batch(self,obs_id):
         sql = "SELECT * FROM reference_star where obs_id = %s LIMIT 1;"
         args = (obs_id,)
