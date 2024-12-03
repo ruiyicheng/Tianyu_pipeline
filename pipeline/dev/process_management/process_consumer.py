@@ -60,7 +60,11 @@ class process_consumer:
         if cmd == 'init_dir':
             pass
         if cmd == 'register':
-            success  = self.dl.register(PID,par['cmd'],par['args'])
+            if type(par['args'])==str:
+                argsend = eval(par['args'])
+            else:
+                argsend = par['args']
+            success  = self.dl.register(PID,par['cmd'],argsend)
         if cmd== 'create_dir':
             success = self.fs.create_dir_for_object(par['obj_type'],par['param_dict'])
         if cmd== 'load_UTC':
