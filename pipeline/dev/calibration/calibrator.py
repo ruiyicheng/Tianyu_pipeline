@@ -89,20 +89,20 @@ ORDER BY
         args = (sky_id,)
         sky_result = self.sql_interface.query(sql, args)
         solver = astrometry.Solver(
-            astrometry.series_4100.index_files(
+            astrometry.series_4200.index_files(
                 cache_directory=dir_data,
-                scales=[7,8,9],
+                scales=[6,7,8,9],
             )
         )
         stars_cm = np.hstack([np.array(archive_star_result['x_template']).reshape(-1,1),np.array(archive_star_result['y_template']).reshape(-1,1)])
         print('resolving astrometry using astrometry.net')
-        print(stars_cm)
+        print(sky_result.loc[0,'ra'],sky_result.loc[0,'dec'])
         solution = solver.solve(
                     stars_xs=np.array(archive_star_result['x_template'])[:70],
                     stars_ys=np.array(archive_star_result['y_template'])[:70],
                     size_hint=astrometry.SizeHint(
                         lower_arcsec_per_pixel=0.2,
-                        upper_arcsec_per_pixel=0.4,
+                        upper_arcsec_per_pixel=20,
                     ),
                     position_hint=astrometry.PositionHint(
                 ra_deg=sky_result.loc[0,'ra'],
@@ -113,6 +113,7 @@ ORDER BY
             tune_up_logodds_threshold = np.log(1e6),
             output_logodds_threshold = np.log(1e9)
         )
+        
         print(f"{solution.best_match().center_ra_deg=}")
         print(f"{solution.best_match().center_dec_deg=}")
         print(f"{solution.best_match().scale_arcsec_per_pixel=}")
@@ -212,7 +213,7 @@ ORDER BY
         return 1
 
         
-    def relative_photometric_calibration(self,PID,PID_reference,PID_flux_extraction,flux_quantile_number = 10,pos_quantile_number = 3):
+    def relative_photometric_calibration(self,PID,PID_reference,PID_flux_extraction,flux_quantile_number = 2,pos_quantile_number = 3):
         def mask_select(df,item,bins,index):
             if index ==0:
                 mask = df[item]<=bins[1]

@@ -395,7 +395,7 @@ ORDER BY
         def nanaverage(A,weights,axis):
             w = weights.reshape(A.shape[0],1,1)
             nume = ((~np.isnan(A))*w).sum(axis=axis)
-            nume[nume<10**-8]= np.nan
+            #nume[nume<10**-8]= np.nan
             return np.nansum(A*w,axis=axis)/nume
         try:
             #print(self.sql_interface.get_process_dependence(PID))
@@ -424,7 +424,7 @@ ORDER BY
                 goodness_list.append(data_line["coadd_weight"])
                 x_to_template = data_line['x_to_template']
                 y_to_template = data_line['y_to_template']
-                if type(x_to_template)==type(None) and type(y_to_template)==type(None):
+                if type(x_to_template)==type(None) or type(y_to_template)==type(None):
                     x_to_template=0
                     y_to_template=0
                 img_folder,img_name = self.fs.get_dir_for_object("img",{"image_id":data_line['image_id']})
@@ -461,18 +461,21 @@ ORDER BY
                 weights_revised = weights.copy()
                 if np.sum(weights)<10**-2:
                     weights_revised = weights+1
-                print(weights_revised)
+                #print(weights_revised,res_dict)
                 res = nanaverage(res_dict,weights_revised,axis = 0)
             if method == "median":
                 res = np.nanmedian(res_dict,axis = 0)
             if method == "flat_stacking":
+                print('!!!')
                 averages_picture = np.mean(res_dict, axis=(1, 2)).reshape(-1,1,1)
                 normalized_picture = res_dict/averages_picture
-                weights = 1/averages_picture #sigma^2 proportional to 1/flux due to Poisson noise
-                mean = nanaverage(normalized_picture,weights_revised,axis = 0)
+                
+                weights = averages_picture #1/sigma^2 proportional to flux due to Poisson noise
+                print('weights = ',weights)
+                mean = nanaverage(normalized_picture,weights,axis = 0)
                 median = np.nanmedian(normalized_picture,axis = 0)
                 res = 3*median-2*mean
-
+            #print(np.sum(n_stack_list))
             res = res.astype(np.float32)
             new_name = f"n_{int(np.sum(n_stack_list))}_PID_{PID}_from_{name_first_file.split('from_')[-1]}"
             
