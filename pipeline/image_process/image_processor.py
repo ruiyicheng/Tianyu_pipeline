@@ -26,92 +26,6 @@ class image_processor:
         self.fs = fs.file_system()
         self.sql_interface = sql_interface.sql_interface()
         #self.pp_this_site = process_pub.process_publisher(site_id = site_id, group_id = group_id)
-
-
-    # def generate_template_image(self,site_id,sky_id,obs_id,n_stack=1):
-    #     #align stack map to sky
-    #     
-    #     outpath = "/home/yichengrui/workspace/TianYu/pipeline/image_process/out/reduced_res/stack_img/template_obs_"+str(alignment_img_obs_id)+"_hierarchy_"+str(alignment_img_hierarchy)+"_imgtype_"+str(alignment_img_type)+"_"+str(hash(time.time()))+".fit"
-    #     mycursor = self.dl.cnx.cursor()
-    #     arg = (alignment_img_obs_id,alignment_img_hierarchy,self.dl.image_type_id[alignment_img_type])
-    #     sql = "SELECT i.obs_id,i.img_path,i.image_id from img as i where i.obs_id = %s and hierarchy = %s and i.image_type_id = %s;"
-    #     mycursor.execute(sql,arg)
-    #     myresult = mycursor.fetchall()
-    #     if len(myresult)<1:
-    #         print("Cannot fing image")
-    #         return -1
-        
-    #     base_id = myresult[0][2]
-    #     alignment_result = self.al.get_deviation(base_id,alignment_img_obs_id, alignment_img_hierarchy, alignment_img_type,good_star_threshold = good_star_threshold)
-
-    #     used_img_list = []
-    #     for alires in alignment_result:
-    #         if alires[3]<good_img_threshold:
-    #             continue
-    #         else:
-    #             used_img_list.append(alires[0])
-    #     new_img_id = self.cl.stacking(outpath,stack_img_id_list = used_img_list,mode = "fixed_id",method = "mean")
-
-    #     mycursor = self.dl.cnx.cursor()
-    #     arg = (new_img_id,)
-    #     sql = "INSERT INTO sky (template_image_id) VALUES (%s);"
-    #     mycursor.execute(sql,arg)
-    #     self.dl.cnx.commit()
-
-    #     mycursor = self.dl.cnx.cursor()
-    #     mycursor.execute("SELECT LAST_INSERT_ID();")
-    #     myresult = mycursor.fetchall()
-    #     new_sky_id = myresult[0][0] #auto_increment
-        
-    #     return new_sky_id,outpath
-    def extract_flux(self, image_PID, template_birth_PID):
-        # 获取图像数据
-        sql = "SELECT * FROM img WHERE birth_process_id = %s;"
-        args = (image_PID,)
-        
-        img_this = self.sql_interface.query() 
-        img_this = self.get_dep_img(PID)
-        assert len(img_this) == 1
-        img_id_this = img_this[0]['image_id']
-        path_first_file, name_first_file = self.fs.get_dir_for_object("img", {"image_id": img_id_this})
-        img_path = f"{path_first_file}/{name_first_file}"
-        img_data = fits.getdata(img_path).byteswap().newbyteorder()
-
-        # 获取背景
-        bkg = sep.Background(img_data)
-        
-        img_obs_id = img_this[0]['obs_id']
-
-        # 获取历史上的星位置
-        sql = """
-        SELECT ts.source_id, tsp.x_template, tsp.y_template 
-        FROM tianyu_source AS ts
-        INNER JOIN tianyu_source_position AS tsp ON ts.source_id = tsp.source_id
-        INNER JOIN img ON tsp.template_img_id = img.image_id
-        WHERE img.image_id = %s
-        """
-        args = (img_id_this,)
-        star_positions = self.sql_interface.query(sql, args)
-
-        # 提取流量
-        flux, fluxerr, flag = sep.sum_circle(img_data, 
-                                             star_positions['x_template'], 
-                                             star_positions['y_template'],
-                                             3.0, 
-                                             err=bkg.rms(), 
-                                             gain=1.0)
-
-        # 保存到数据库
-        for i, row in star_positions.iterrows():
-            sql = """
-            INSERT INTO tianyu_source_flux 
-            (source_id, image_id, flux, flux_err) 
-            VALUES (%s, %s, %s, %s)
-            """
-            args = (row['source_id'], img_id_this, float(flux[i]), float(fluxerr[i]))
-            self.sql_interface.execute(sql, args)
-
-        print(f"已为图像 {img_id_this} 提取并保存 {len(star_positions)} 个源的流量")
     def get_dep_img(self,PID,process_type = "birth"):
         res_query = []
         PID_stacker = self.sql_interface.get_process_dependence(PID)
@@ -128,6 +42,95 @@ class image_processor:
                 #print(result)
                 res_query.extend(result.to_dict("records"))
         return res_query
+
+
+    def extract_flux(self, PID,image_PID, template_source_PID, n_margin_pixels = 30, show = False):
+        # 获取图像数据
+        sql = "SELECT * FROM img WHERE birth_process_id = %s;"
+        args = (image_PID,)
+        img_this = self.sql_interface.query(sql, args)
+        
+        sql = "SELECT tsp.source_id as source_id, tsp.x_template as x_template,tsp.y_template as y_template, sim.image_id as image_id, sim.absolute_deviation_x as deviation_x, sim.absolute_deviation_y as deviation_y FROM tianyu_source_position as tsp INNER JOIN sky_image_map as sim ON sim.image_id =tsp.template_img_id WHERE sim.process_id = %s"
+        args = (template_source_PID,)
+        star_template = self.sql_interface.query(sql,args) 
+        print(star_template)
+        
+        assert len(img_this) == 1
+        img_id_this = int(img_this.loc[0,'image_id'])
+        path_first_file, name_first_file = self.fs.get_dir_for_object("img", {"image_id": img_id_this})
+        img_path = f"{path_first_file}/{name_first_file}"
+        img_data = fits.getdata(img_path)
+        max_y_img = img_data.shape[0]
+        max_x_img = img_data.shape[1]
+        # 获取背景
+        print(img_data.shape)
+        bkg = sep.Background(img_data.astype(np.float32))
+        bkgrms = bkg.rms()
+        print(img_this)
+        x_in_template = np.array(star_template['x_template'].values)-np.array(star_template['deviation_x'])-int(img_this.loc[0,'x_to_template'])
+        y_in_template = np.array(star_template['y_template'].values)-np.array(star_template['deviation_y'])-int(img_this.loc[0,'y_to_template'])
+
+        # 10 20 30 can be decided by ml model
+        img_data = img_data.byteswap().newbyteorder()
+        flux, fluxerr, flag = sep.sum_circle(img_data, x_in_template,y_in_template,10.0, err=bkgrms,bkgann = (20,30))
+
+
+        if show:
+            from matplotlib.patches import Ellipse
+            import matplotlib.pyplot as plt
+            # plot background-subtracted image
+            fig, ax = plt.subplots()
+            m, s = np.mean(img_data), np.std(img_data)
+            im = ax.imshow(img_data, interpolation='nearest', cmap='gray',
+                        vmin=m-3*s, vmax=m+3*s, origin='lower')
+
+            # plot an ellipse for each object
+            # for i in range(len(x_in_template)):
+            #     e = Ellipse(xy=(x_in_template[i], y_in_template[i]),
+            #                 width=10+1.5*flux[i],
+            #                 height=10+1.5*flux[i],
+            #                 angle=0)
+            #     e.set_facecolor('none')
+            #     e.set_edgecolor('red')
+            #     ax.add_artist(e)
+            i= 1922
+            print(f'position={np.array(star_template['x_template'].values)[i]}  {np.array(star_template['y_template'].values)[i]}')
+            e = Ellipse(xy=(x_in_template[i], y_in_template[i]),
+                        width=50*flux[i],
+                        height=50*flux[i],
+                        angle=0)
+            e.set_facecolor('none')
+            e.set_edgecolor('green')
+            ax.add_artist(e)
+            plt.show()
+            print(star_template)
+            print(img_this)
+        
+        
+        # writing the flux into db not consider marginal results
+        # sql = "SELECT * FROM star_pixel_img where image_id = %s;"
+        # args = (int(star_template.loc[0,'image_id']),) 
+        # results = self.sql_interface.query(sql,args)
+        # print(results)
+        # results_source = set([])
+        # if len(results)>0:
+        #     results_source = results['source_id']
+        sql = "INSERT INTO star_pixel_img (image_id, source_id, flux_raw, flux_raw_error, birth_process_id) VALUES (%s,%s,%s,%s,%s);"
+        args = []
+
+        for i in tqdm(range(len(x_in_template))):
+            if x_in_template[i]>max_x_img-n_margin_pixels or x_in_template[i]<n_margin_pixels or y_in_template[i]>max_y_img-n_margin_pixels or y_in_template[i]<n_margin_pixels:
+                continue
+
+            args.append( (int(img_id_this),int(star_template.loc[i,'source_id']), flux[i],fluxerr[i],PID))
+
+        print(len(sql.split('%s')))
+
+        self.sql_interface.executemany(sql,args)
+        #print(args)
+
+        return 1
+
 
     def detect_source_in_template(self,PID,sky_id,resolve_sigma = 3,minarea = 100,max_distance = 5,max_ratio = 2,debug = False,as_new_template = True):
         # 1. get the template image
@@ -231,8 +234,8 @@ ORDER BY
                 args = (0,)
                 self.sql_interface.execute(sql, args)
                 
-            sql = "INSERT INTO sky_image_map (sky_id,image_id,template_in_use,absolute_deviation_x,absolute_deviation_y) VALUES (%s,%s,%s,%s,%s)"
-            args = (sky_id,img_id_this,int(as_new_template),absolute_deviation_x,absolute_deviation_y)
+            sql = "INSERT INTO sky_image_map (sky_id,image_id,template_in_use,absolute_deviation_x,absolute_deviation_y,process_id) VALUES (%s,%s,%s,%s,%s,%s)"
+            args = (sky_id,img_id_this,int(as_new_template),absolute_deviation_x,absolute_deviation_y,PID)
             self.sql_interface.execute(sql, args)
             for ind_obj,ind_archive in matched_indices:
                 sql = "SELECT * FROM tianyu_source_position WHERE source_id = %s AND template_img_id = %s;"
@@ -386,13 +389,13 @@ ORDER BY
         #self.sql_interface.cnx.commit()
         self.sql_interface.execute(sql,arg)
         return 1
-    
+    #method = mean, median, flat_stacking (3median-2mean)
     def stacking(self,PID,site_id,method = "mean",PID_type = "birth",ret='success',par = {},consider_goodness = 0):
         
         def nanaverage(A,weights,axis):
             w = weights.reshape(A.shape[0],1,1)
             nume = ((~np.isnan(A))*w).sum(axis=axis)
-            nume[nume<10**-8]= np.nan
+            #nume[nume<10**-8]= np.nan
             return np.nansum(A*w,axis=axis)/nume
         try:
             #print(self.sql_interface.get_process_dependence(PID))
@@ -421,7 +424,7 @@ ORDER BY
                 goodness_list.append(data_line["coadd_weight"])
                 x_to_template = data_line['x_to_template']
                 y_to_template = data_line['y_to_template']
-                if type(x_to_template)==type(None) and type(y_to_template)==type(None):
+                if type(x_to_template)==type(None) or type(y_to_template)==type(None):
                     x_to_template=0
                     y_to_template=0
                 img_folder,img_name = self.fs.get_dir_for_object("img",{"image_id":data_line['image_id']})
@@ -458,13 +461,21 @@ ORDER BY
                 weights_revised = weights.copy()
                 if np.sum(weights)<10**-2:
                     weights_revised = weights+1
-                print(weights_revised)
+                #print(weights_revised,res_dict)
                 res = nanaverage(res_dict,weights_revised,axis = 0)
             if method == "median":
                 res = np.nanmedian(res_dict,axis = 0)
-            if method == "ZOGY":
-                pass
-
+            if method == "flat_stacking":
+                print('!!!')
+                averages_picture = np.mean(res_dict, axis=(1, 2)).reshape(-1,1,1)
+                normalized_picture = res_dict/averages_picture
+                
+                weights = averages_picture #1/sigma^2 proportional to flux due to Poisson noise
+                print('weights = ',weights)
+                mean = nanaverage(normalized_picture,weights,axis = 0)
+                median = np.nanmedian(normalized_picture,axis = 0)
+                res = 3*median-2*mean
+            #print(np.sum(n_stack_list))
             res = res.astype(np.float32)
             new_name = f"n_{int(np.sum(n_stack_list))}_PID_{PID}_from_{name_first_file.split('from_')[-1]}"
             

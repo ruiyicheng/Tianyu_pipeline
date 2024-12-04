@@ -19,7 +19,7 @@ class file_transferer:
         The pictures will be registered.
         In real runtime. This step would be executed automatically because of real-time demand and large number of sky region.
         '''
-        file_paths = sorted(glob.glob(input_path+'/*'))
+        file_paths = sorted(glob.glob(input_path+'*'))
         self.fs.init_file_system()
 
 

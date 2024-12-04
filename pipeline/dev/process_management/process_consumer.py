@@ -27,27 +27,6 @@ class process_consumer:
         self.calibrator = calibrator.calibrator()
         self.channel.queue_declare(queue=f'command_queue_{self.site_id}_{self.group_id}', durable=True)
         
-    # def queue_db(self,sql,argsql):
-    #     mycursor = self.sql_interface.cnx.cursor()
-    #     mycursor.execute(sql,argsql)
-    #     myresult = mycursor.fetchall()
-    #     headers = [i[0] for i in mycursor.description]
-    #     res = pd.DataFrame(myresult,columns = headers,dtype=object)
-    #     return res
-    # def get_channel(self):
-    #     hostname = socket.gethostname()
-    #     local_host_list = set(socket.gethostbyname_ex(hostname)[2])
-    #     print(local_host_list)
-    #     sql = "SELECT * FROM data_process_site;"
-    #     args = tuple()
-    #     res = self.queue_db(sql,args)
-    #     # pika_host = res[res['is_pika_site']].loc[0]['process_site_ip']
-    #     # this_site_index = res[res['is_pika_site']].loc[0]['process_site_id']
-    #     # if pika_host in local_host_list:
-    #     #     pike_host = 'localhost'
-    #     this_site_index = 1
-    #     pike_host = '127.0.0.1'
-    #     return this_site_index,pike_host
 
     def resolve_msg(self,msg):
         res = msg.split("|")
@@ -69,15 +48,23 @@ class process_consumer:
                 PID_type = "birth"
             else:
                 PID_type = par['PID_type']
+            if not "method" in par:
+                method = "mean"
+            else:
+                method = par['method']
             if not "consider_goodness" in par:
                 consider_goodness = 0
             else:
                 consider_goodness = par['consider_goodness']
-            success = self.image_processor.stacking(PID,self.site_id,PID_type = PID_type,par = par,consider_goodness = consider_goodness)
+            success = self.image_processor.stacking(PID,self.site_id,method=method,PID_type = PID_type,par = par,consider_goodness = consider_goodness)
         if cmd == 'init_dir':
             pass
         if cmd == 'register':
-            success  = self.dl.register(PID,par['cmd'],par['args'])
+            if type(par['args'])==str:
+                argsend = eval(par['args'])
+            else:
+                argsend = par['args']
+            success  = self.dl.register(PID,par['cmd'],argsend)
         if cmd== 'create_dir':
             success = self.fs.create_dir_for_object(par['obj_type'],par['param_dict'])
         if cmd== 'load_UTC':
@@ -107,6 +94,14 @@ class process_consumer:
             success = self.image_processor.detect_source_in_template(PID,par["sky_id"],as_new_template = par["as_new_template"])
         if cmd == "crossmatch":
             success = self.calibrator.crossmatch_external(par['sky_id'])
+        if cmd == "select_reference_star":
+            success = self.calibrator.select_reference_star(PID,par['PID_template_generating'])
+        if cmd == "extract_flux":
+            success = self.image_processor.extract_flux(PID,par['PID_img'],par['PID_detect_source'])
+        if cmd == "relative_photometry":
+            success = self.calibrator.relative_photometric_calibration(PID,par['PID_reference_star'],par['PID_extract_flux'])
+        #if cmd == "extract_flux":
+
         #time.sleep(0.5)
         #return 0
         if success:

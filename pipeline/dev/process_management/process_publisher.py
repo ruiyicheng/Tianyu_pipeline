@@ -28,8 +28,74 @@ class process_publisher:
 
     #     pid_cal_list = self.calibrate_observation(obs_id,PID_sub,PID_div)
     #     self.generate_template(pid_cal_list,sky_id)
-
+    def process_TOO_obs(self,PID_bias,PID_flat,PID_raw,PID_sky): # Generate new sky template with the stacking results
+        # calibrate the raw image
+        sql = 'SELECT birth_process_id FROM img JOIN observation as obs on obs.obs_id = img.obs_id WHERE obs.process_id = %s and n_stack=1 and (img.image_type_id=1 or img.image_type_id=5 or img.image_type_id = 9 or img.image_type_id = 7);'
+        args = (PID_bias,)
+        PID_biases = self.sql_interface.query(sql,args)
+        args = (PID_flat,)
+        PID_flats = self.sql_interface.query(sql,args)
+        args = (PID_raw,)
+        sql = "SELECT obs_id from observation where observation.process_id = %s;"
+        obs_id_raw = self.sql_interface.query(sql,args)
+        PID_super_bias = self.stacking(list(PID_biases['birth_process_id']))
+        PID_flat_debiased_list = []
+        for pf in list(PID_flats['birth_process_id']):
+            flat_debiased_pid = self.calibrate({'PID_cal':int(pf),'PID_sub':PID_super_bias,'subtract_bkg':0})
+            PID_flat_debiased_list.append(flat_debiased_pid)
+        PID_super_flat = self.stacking(PID_flat_debiased_list,method = 'flat_stacking',num_image_limit=50)
+        PID_calibrated_img = self.calibrate_observation(obs_id_raw.loc[0,'obs_id'],PID_super_bias,PID_super_flat)
         
+        # Generate new sky template with the stacking results
+        stacked_PID = self.align_stack_img(PID_calibrated_img)
+        # resolve targets
+        sql = 'select sky_id from sky where process_id = %s;'
+        args = (PID_sky,)
+        sky_id = int(self.sql_interface.query(sql,args).loc[0,'sky_id'])
+        resolve_star_pid = self.detect_source(stacked_PID,sky_id)
+        PID_reference_star = self.select_reference_star(resolve_star_pid)
+        PID_flux_batch = self.extract_flux_batch(int(obs_id_raw.loc[0,'obs_id']),resolve_star_pid)
+        relative_photometry_list = []
+        for PID_flux in PID_flux_batch:
+            relative_photometry_list.append(self.relative_photometry(PID_reference_star,PID_flux))
+
+        return relative_photometry_list
+    def relative_photometry_batch(self,obs_id):
+        sql = "SELECT * FROM reference_star where obs_id = %s LIMIT 1;"
+        args = (obs_id,)
+        result = self.sql_interface.query(sql,args)
+        PID_reference_star = int(result.loc[0,'process_id'])
+        sql = "SELECT sim.birth_process_id as process_id FROM star_pixel_img as sim INNER JOIN img on img.image_id = sim.image_id where img.obs_id = %s;"
+        result = self.sql_interface.query(sql,args)
+        PID_extract_flux_list = list(set([int(i) for i in result['process_id']]))
+        for PID_extract_flux in PID_extract_flux_list:
+            self.relative_photometry(PID_reference_star,PID_extract_flux)
+    def relative_photometry(self,PID_reference_star,PID_extract_flux):
+        param_dict = {
+            'PID_reference_star': PID_reference_star,
+            'PID_extract_flux':PID_extract_flux
+        }
+        return self.publish_CMD(self.default_site_id, self.default_group_id, f'relative_photometry|{param_dict}', [PID_reference_star,PID_extract_flux])
+    def select_reference_star(self,PID_template_generating):
+        param_dict = {
+            'PID_template_generating': PID_template_generating
+        }
+        return self.publish_CMD(self.default_site_id, self.default_group_id, f'select_reference_star|{param_dict}', [PID_template_generating])
+    
+    def extract_flux_batch(self,obs_id, resolve_id,nstack = 1):
+        if nstack==1:
+            image_type_id = 2
+        else:
+            image_type_id = 3
+
+        sql = "SELECT * from img where n_stack= %s AND image_type_id = %s AND obs_id = %s;"
+        args = (nstack,image_type_id,obs_id)
+        results = self.sql_interface.query(sql,args)
+        PID_extract_list = []
+        if len(results)>0:
+            for _,r in results.iterrows():
+                PID_extract_list.append(self.extract_flux(int(r['birth_process_id']),int(resolve_id)))
+        return PID_extract_list
     def align_stack_img(self,calibrated_birth_PID_list,template_birth_PID = -1):
         if template_birth_PID==-1:
             template_birth_PID = min(calibrated_birth_PID_list)
@@ -74,6 +140,15 @@ class process_publisher:
     def crossmatch(self,sky_id,dep_PIDs = []):
         param_dict = {'sky_id': sky_id}
         return self.publish_CMD(self.default_site_id, self.default_group_id, f'crossmatch|{param_dict}', dep_PIDs)
+    
+    def extract_flux(self,PID_img,PID_detect_source):
+        PID_img = int(PID_img)
+        PID_detect_source = int(PID_detect_source)
+        param_dict = {
+            'PID_img': PID_img,
+            'PID_detect_source': PID_detect_source
+        }
+        return self.publish_CMD(self.default_site_id, self.default_group_id, f'extract_flux|{param_dict}', [PID_img,PID_detect_source])
     def calibrate_observation(self,obs_id,PID_sub,PID_div):
         sql = 'SELECT birth_process_id FROM img WHERE obs_id = %s and n_stack=1 and image_type_id=1;'
         args = (obs_id,)
@@ -182,7 +257,7 @@ class process_publisher:
         return PID_this
 
 
-    def stacking(self,PIDs,PID_type='birth',num_image_limit = 5,consume_site_id=-1,consume_group_id=-1,consider_goodness=0,additional_dependence_list = []):
+    def stacking(self,PIDs,PID_type='birth',method = 'mean',num_image_limit = 5,consume_site_id=-1,consume_group_id=-1,consider_goodness=0,additional_dependence_list = []):
         PIDs = [int(p) for p in PIDs]
         additional_dependence_list = [int(p) for p in additional_dependence_list]
         if consume_site_id==-1:
@@ -193,13 +268,13 @@ class process_publisher:
         for i in range((len(PIDs)-1)//num_image_limit+1):
             stack_this = PIDs[i*num_image_limit:(i+1)*num_image_limit]
             if len(stack_this)!=1:
-                PID_this = self.publish_CMD(consume_site_id,consume_group_id,'stack|{"PID_type":"'+PID_type+'","consider_goodness":'+str(consider_goodness)+'}',stack_this+additional_dependence_list)
+                PID_this = self.publish_CMD(consume_site_id,consume_group_id,'stack|{"PID_type":"'+PID_type+'","consider_goodness":'+str(consider_goodness)+',"method":"'+method+'"}',stack_this+additional_dependence_list)
                 Next_hierarchy_PID_list.append(PID_this)
             else:
                 Next_hierarchy_PID_list.append(stack_this[0])
 
         if len(Next_hierarchy_PID_list)>1:
-            PID_ret = self.stacking(Next_hierarchy_PID_list,num_image_limit=num_image_limit,consume_site_id=consume_site_id,consume_group_id=consume_group_id,consider_goodness=consider_goodness)
+            PID_ret = self.stacking(Next_hierarchy_PID_list,method = method,num_image_limit=num_image_limit,consume_site_id=consume_site_id,consume_group_id=consume_group_id,consider_goodness=consider_goodness)
         else:
             return PID_this
         return PID_ret
