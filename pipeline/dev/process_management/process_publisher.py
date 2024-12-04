@@ -44,7 +44,7 @@ class process_publisher:
             flat_debiased_pid = self.calibrate({'PID_cal':int(pf),'PID_sub':PID_super_bias,'subtract_bkg':0})
             PID_flat_debiased_list.append(flat_debiased_pid)
         PID_super_flat = self.stacking(PID_flat_debiased_list,method = 'flat_stacking',num_image_limit=50)
-        PID_calibrated_img = self.calibrate_observation(obs_id_raw.loc[0,'obs_id'],PID_super_bias,PID_super_flat)
+        PID_calibrated_img = self.calibrate_observation(int(obs_id_raw.loc[0,'obs_id']),PID_super_bias,PID_super_flat)
         
         # Generate new sky template with the stacking results
         stacked_PID = self.align_stack_img(PID_calibrated_img)
