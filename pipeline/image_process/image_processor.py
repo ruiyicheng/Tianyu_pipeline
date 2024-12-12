@@ -132,7 +132,7 @@ class image_processor:
         return 1
 
 
-    def detect_source_in_template(self,PID,sky_id,resolve_sigma = 3,minarea = 100,max_distance = 5,max_ratio = 2,debug = False,as_new_template = True):
+    def detect_source_in_template(self,PID,sky_id,resolve_sigma = 3,minarea = 20,max_distance = 5,max_ratio = 2,debug = False,as_new_template = True):
         # 1. get the template image
         # 2. get the sources in template image
         # 3. get the sources in target image
