@@ -89,45 +89,46 @@ ORDER BY
         args = (sky_id,)
         sky_result = self.sql_interface.query(sql, args)
         solver = astrometry.Solver(
-            astrometry.series_4200.index_files(
+            astrometry.series_4100.index_files(
                 cache_directory=dir_data,
-                scales=[6,7,8,9],
+                scales=[7,8,9],
             )
         )
         stars_cm = np.hstack([np.array(archive_star_result['x_template']).reshape(-1,1),np.array(archive_star_result['y_template']).reshape(-1,1)])
         print('resolving astrometry using astrometry.net')
         print(sky_result.loc[0,'ra'],sky_result.loc[0,'dec'])
         solution = solver.solve(
-                    stars_xs=np.array(archive_star_result['x_template'])[:70],
-                    stars_ys=np.array(archive_star_result['y_template'])[:70],
+                    stars_xs=np.array(archive_star_result['x_template'])[:50],
+                    stars_ys=np.array(archive_star_result['y_template'])[:50],
                     size_hint=astrometry.SizeHint(
                         lower_arcsec_per_pixel=0.2,
-                        upper_arcsec_per_pixel=20,
+                        upper_arcsec_per_pixel=2,
                     ),
                     position_hint=astrometry.PositionHint(
                 ra_deg=sky_result.loc[0,'ra'],
                 dec_deg=sky_result.loc[0,'dec'],
-                radius_deg=1.0,
+                radius_deg=.3,
             ),
             solve_id = None,
             tune_up_logodds_threshold = np.log(1e6),
             output_logodds_threshold = np.log(1e9)
         )
-        
+        if not solution.has_match():
+
+            return 0
         print(f"{solution.best_match().center_ra_deg=}")
         print(f"{solution.best_match().center_dec_deg=}")
         print(f"{solution.best_match().scale_arcsec_per_pixel=}")
         print('searching gdr3 targets')
         Gaia_query_res = self.dl.search_GDR3_by_square(ra = solution.best_match().center_ra_deg,dec = solution.best_match().center_dec_deg, fov = 0.1+(sky_result.loc[0,'fov_x']**2+sky_result.loc[0,'fov_y']**2)**0.5/2,Gmag_limit = 20)
         print(Gaia_query_res)
-        if solution.has_match():
-            wcs = astropy.wcs.WCS(solution.best_match().wcs_fields)
-            pixels = wcs.all_world2pix(
+
+        wcs = astropy.wcs.WCS(solution.best_match().wcs_fields)
+        pixels = wcs.all_world2pix(
                 np.hstack([Gaia_query_res['ra'].reshape(-1,1), Gaia_query_res['dec'].reshape(-1,1)]),
                 0,
             )
-        else:
-            return 0
+        
         x1 = np.squeeze(archive_star_result['x_template'])
         y1 = np.squeeze(archive_star_result['y_template'])
         x2 = np.squeeze(pixels[:,0])
@@ -213,7 +214,7 @@ ORDER BY
         return 1
 
         
-    def relative_photometric_calibration(self,PID,PID_reference,PID_flux_extraction,flux_quantile_number = 2,pos_quantile_number = 3):
+    def relative_photometric_calibration(self,PID,PID_reference,PID_flux_extraction,flux_quantile_number = 5,pos_quantile_number = 3):
         def mask_select(df,item,bins,index):
             if index ==0:
                 mask = df[item]<=bins[1]
@@ -242,8 +243,9 @@ ORDER BY
         all_star['x_quantile'],bin_x = pd.qcut(all_star['x_template'], pos_quantile_number, labels=False,retbins=True) 
         all_star['y_quantile'],bin_y = pd.qcut(all_star['y_template'], pos_quantile_number, labels=False,retbins=True)
 
-        # print(reference_star.columns)
-        # print(all_star.columns)
+        # print(reference_star)
+        # print(all_star)
+        # print(raw_flux)
         # print(raw_flux.columns)
         args_calibration = []
         for index_flux in range(len(bin_flux)-1):
@@ -259,16 +261,17 @@ ORDER BY
                     mask_y_raw = mask_select(raw_flux,'y_template',bin_y,index_bin_y)
                     mask_raw = mask_flux_raw & mask_x_raw & mask_y_raw
                     raw_flux_this_bin = raw_flux[mask_raw]
-                    
+                    # print(raw_flux_this_bin,'\n',reference_star_this_bin)
                     reference_flux = pd.merge(raw_flux_this_bin,reference_star_this_bin,how = 'inner',on = 'source_id')
                     reference_flux.rename(columns={'flux_raw': 'flux_raw_reference', 'flux_raw_error': 'flux_raw_error_reference','star_pixel_img_id':'pixel_id'},inplace = True)
                     #print(reference_flux.columns)
+                    # print(reference_flux)
                     join_flux = pd.merge(raw_flux_this_bin,reference_flux,how = 'left',on = 'source_id')
                     
                     join_flux_filled = join_flux.fillna(0)
                     is_reference = ~join_flux['flux_raw_reference'].isna()
                     num_reference = len(reference_flux)
-
+                    #print('num_reference = ',num_reference,'at',index_flux,index_bin_x,index_bin_y)
                     average_reference = (np.sum(join_flux_filled['flux_raw_reference'])-np.array(join_flux_filled['flux_raw_reference']))/(num_reference-np.array(is_reference,dtype = int))
                     join_flux['relative_flux'] = join_flux['flux_raw']/average_reference
                     join_flux['relative_flux_error'] = join_flux['flux_raw_error']/average_reference

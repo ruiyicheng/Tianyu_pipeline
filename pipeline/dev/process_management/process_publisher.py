@@ -54,7 +54,9 @@ class process_publisher:
         sky_id = int(self.sql_interface.query(sql,args).loc[0,'sky_id'])
         resolve_star_pid = self.detect_source(stacked_PID,sky_id)
         PID_reference_star = self.select_reference_star(resolve_star_pid)
-        PID_flux_batch = self.extract_flux_batch(int(obs_id_raw.loc[0,'obs_id']),resolve_star_pid)
+        PID_flux_batch = []
+        for img in PID_calibrated_img:
+            PID_flux_batch.append(self.extract_flux(int(img),int(resolve_star_pid)))
         relative_photometry_list = []
         for PID_flux in PID_flux_batch:
             relative_photometry_list.append(self.relative_photometry(PID_reference_star,PID_flux))
@@ -287,7 +289,7 @@ class process_publisher:
         sql = "INSERT INTO process_list (process_id,process_cmd,process_status_id,process_site_id,process_group_id) VALUES (%s, %s,1,%s,%s)"
         argsql = (PID_this,CMD,process_site,process_group)
         mycursor.execute(sql, argsql)
-        self.sql_interface.cnx.commit()
+        # self.sql_interface.cnx.commit()
         for PID_dep in dep_PID_list:
 
             sql = "INSERT INTO process_dependence (master_process_id, dependence_process_id) VALUES (%s, %s)"
