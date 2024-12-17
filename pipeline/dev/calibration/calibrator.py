@@ -129,10 +129,10 @@ ORDER BY
         print(f"{solution.best_match().scale_arcsec_per_pixel=}")
         print('searching gdr3 targets')
         Gaia_query_res = self.dl.search_GDR3_by_square(ra = solution.best_match().center_ra_deg,dec = solution.best_match().center_dec_deg, fov = 0.1+(sky_result.loc[0,'fov_x']**2+sky_result.loc[0,'fov_y']**2)**0.5/2,Gmag_limit = 20)
-        print(Gaia_query_res['in_vari_classification_result'])
+        #print(Gaia_query_res['in_vari_classification_result'])
         is_variable = []
         for i in Gaia_query_res['in_vari_classification_result']:
-            print(i,type(i))
+            #print(i,type(i))
             if i==True or i==False:
                 is_variable.append(True)
             else:
@@ -214,7 +214,7 @@ ORDER BY
         assert len(result)==1
         image_id = result.loc[0,'image_id']
         # Only resolved star can be treated as reference star
-        sql = "SELECT * FROM tianyu_source_position WHERE template_img_id = %s NATURAL JOIN source_crossmatch;"
+        sql = "SELECT * FROM tianyu_source_position NATURAL JOIN source_crossmatch WHERE template_img_id = %s ;"
         args = (int(image_id),)
         result = self.sql_interface.query(sql,args)
         x_template = np.array(result['x_template'])
