@@ -88,33 +88,41 @@ ORDER BY
         sql = "SELECT * FROM sky where sky_id = %s;"
         args = (sky_id,)
         sky_result = self.sql_interface.query(sql, args)
-        solver = astrometry.Solver(
-            astrometry.series_4100.index_files(
-                cache_directory=dir_data,
-                scales=[7,8,9],
+
+        #Try different solver to get the best result
+
+
+        solvers = ['astrometry.Solver(astrometry.series_4100.index_files(cache_directory=dir_data,scales=[7,8,9,10,11,12,13,14],))'
+                   ,
+                   'astrometry.Solver(astrometry.series_4200.index_files(cache_directory=dir_data,scales=[6,7,8,9],))',
+                     'astrometry.Solver(astrometry.series_5200.index_files(cache_directory=dir_data,scales=[6],))']
+        for solver_str in solvers:
+            solver = eval(solver_str)
+            print('resolving astrometry using astrometry.net')
+            print(sky_result.loc[0,'ra'],sky_result.loc[0,'dec'])
+            solution = solver.solve(
+                        stars_xs=np.array(archive_star_result['x_template'])[:50],
+                        stars_ys=np.array(archive_star_result['y_template'])[:50],
+                        size_hint=astrometry.SizeHint(
+                            lower_arcsec_per_pixel=0.2,
+                            upper_arcsec_per_pixel=2,
+                        ),
+                        position_hint=astrometry.PositionHint(
+                    ra_deg=sky_result.loc[0,'ra'],
+                    dec_deg=sky_result.loc[0,'dec'],
+                    radius_deg=.5,
+                ),
+                solve_id = None,
+                tune_up_logodds_threshold = np.log(1e6),
+                output_logodds_threshold = np.log(1e9)
             )
-        )
-        stars_cm = np.hstack([np.array(archive_star_result['x_template']).reshape(-1,1),np.array(archive_star_result['y_template']).reshape(-1,1)])
-        print('resolving astrometry using astrometry.net')
-        print(sky_result.loc[0,'ra'],sky_result.loc[0,'dec'])
-        solution = solver.solve(
-                    stars_xs=np.array(archive_star_result['x_template'])[:50],
-                    stars_ys=np.array(archive_star_result['y_template'])[:50],
-                    size_hint=astrometry.SizeHint(
-                        lower_arcsec_per_pixel=0.2,
-                        upper_arcsec_per_pixel=2,
-                    ),
-                    position_hint=astrometry.PositionHint(
-                ra_deg=sky_result.loc[0,'ra'],
-                dec_deg=sky_result.loc[0,'dec'],
-                radius_deg=.3,
-            ),
-            solve_id = None,
-            tune_up_logodds_threshold = np.log(1e6),
-            output_logodds_threshold = np.log(1e9)
-        )
+            if solution.has_match():
+                break
+            else:
+                print('failed, tyring next solver')
         if not solution.has_match():
 
+            print('All solver failed!')
             return 0
         print(f"{solution.best_match().center_ra_deg=}")
         print(f"{solution.best_match().center_dec_deg=}")
@@ -122,7 +130,7 @@ ORDER BY
         print('searching gdr3 targets')
         Gaia_query_res = self.dl.search_GDR3_by_square(ra = solution.best_match().center_ra_deg,dec = solution.best_match().center_dec_deg, fov = 0.1+(sky_result.loc[0,'fov_x']**2+sky_result.loc[0,'fov_y']**2)**0.5/2,Gmag_limit = 20)
         print(Gaia_query_res)
-
+        is_variable = (Gaia_query_res['in_vari_classification_result']==Gaia_query_res['in_vari_classification_result'])
         wcs = astropy.wcs.WCS(solution.best_match().wcs_fields)
         pixels = wcs.all_world2pix(
                 np.hstack([Gaia_query_res['ra'].reshape(-1,1), Gaia_query_res['dec'].reshape(-1,1)]),
@@ -144,19 +152,27 @@ ORDER BY
         # kmeans.fit(np.log(distances))
         # print(np.exp(kmeans.cluster_centers_))
         # record the crossmatch results in db
+        arg_update = []
+        arg_insert = []
         for i,r in archive_star_result.iterrows():
             source_id_this = int(r['source_id'])
             sql = "SELECT * FROM source_crossmatch WHERE source_id = %s;"
             args = (source_id_this,)
             result = self.sql_interface.query(sql,args)
             update = len(result)
+            args = (int(Gaia_query_res['SOURCE_ID'][indices[i,0]]),int(Gaia_query_res['SOURCE_ID'][indices[i,1]]),int(Gaia_query_res['SOURCE_ID'][indices[i,2]]),float(distances[i,0]),float(distances[i,1]),float(distances[i,2]),int(is_variable[i,0]),int(is_variable[i,1]),int(is_variable[i,2]),int(source_id_this))
             if update:
-                sql = "UPDATE source_crossmatch SET gdr3_id1 = %s,gdr3_id2 = %s,gdr3_id3 = %s, gdr3_dist1 = %s,gdr3_dist2 = %s,gdr3_dist3 = %s WHERE source_id = %s"
+                arg_update.append(args)
+                #
             else:
-                sql = "INSERT INTO source_crossmatch (gdr3_id1,gdr3_id2,gdr3_id3,gdr3_dist1,gdr3_dist2,gdr3_dist3,source_id) VALUES (%s,%s,%s,%s,%s,%s,%s)"
-            args = (int(Gaia_query_res['SOURCE_ID'][indices[i,0]]),int(Gaia_query_res['SOURCE_ID'][indices[i,1]]),int(Gaia_query_res['SOURCE_ID'][indices[i,2]]),float(distances[i,0]),float(distances[i,1]),float(distances[i,2]),int(source_id_this))
-            print(args)
-            self.sql_interface.execute(sql,args)
+                arg_insert.append(args)
+                #
+
+            #print(args)
+        sql = "INSERT INTO source_crossmatch (gdr3_id1,gdr3_id2,gdr3_id3,gdr3_dist1,gdr3_dist2,gdr3_dist3,gdr3_is_variable1,gdr3_is_variable2,gdr3_is_variable3,source_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);"
+        self.sql_interface.executemany(sql,arg_insert)
+        sql = "UPDATE source_crossmatch SET gdr3_id1 = %s,gdr3_id2 = %s,gdr3_id3 = %s, gdr3_dist1 = %s,gdr3_dist2 = %s,gdr3_dist3 = %s,gdr3_is_variable1 = %s,gdr3_is_variable2 = %s,gdr3_is_variable3 = %s WHERE source_id = %s;"
+        self.sql_interface.executemany(sql,arg_update)
         if show:
             index_target = np.argmax(Gaia_query_res['SOURCE_ID']==2188601779406152448)
             index_real_target = np.argmax(indices[:,0]==index_target)
@@ -181,28 +197,36 @@ ORDER BY
         return 1
     def absolute_photometric_calibration(self):
         pass
-    def select_reference_star(self,PID,template_generation_PID,dis_quantile_threshold = 0.5, minimum_marginal_deviation = 200):
+    def select_reference_star(self,PID,template_generation_PID,template_crossmatch_PID,dis_quantile_threshold = 0.5, minimum_marginal_deviation = 200):
         # load database, find best reference star
         sql = "SELECT * FROM sky_image_map WHERE process_id = %s;"
         args = (template_generation_PID,)
         result = self.sql_interface.query(sql,args)
         assert len(result)==1
         image_id = result.loc[0,'image_id']
-        sql = "SELECT * FROM tianyu_source_position WHERE template_img_id = %s;"
+        # Only resolved star can be treated as reference star
+        sql = "SELECT * FROM tianyu_source_position WHERE template_img_id = %s NATURAL JOIN source_crossmatch;"
         args = (int(image_id),)
         result = self.sql_interface.query(sql,args)
         x_template = np.array(result['x_template'])
         y_template = np.array(result['y_template'])
+        main_is_not_variable = ~np.array(result['gdr3_is_variable1'])
+        is_single_match = (np.array(result['gdr3_dist2'])/np.array(result['gdr3_dist1']))>1.5
         #flux_template = np.array(result['flux_template'])
         center_star_mask = (x_template<np.max(x_template)-minimum_marginal_deviation)&(x_template>minimum_marginal_deviation)&(y_template<np.max(y_template)-minimum_marginal_deviation)&(y_template>minimum_marginal_deviation)
         distance, index = self.find_nearest_kdtree(x_template,y_template,x_template,y_template)
         dis_threshold = np.quantile(distance[:,1],dis_quantile_threshold)
-        reference_star_indices = np.where((distance[:,1] > dis_threshold)&center_star_mask)
+        reference_star_indices = np.where((distance[:,1] > dis_threshold)&center_star_mask&is_single_match&main_is_not_variable)
         reference_star_source_id = result.loc[reference_star_indices,'source_id']
         sql = "SELECT * FROM img where image_id = %s;"
         args = (int(image_id),)
         result = self.sql_interface.query(sql,args)
-        obs_id = result.loc[0,'obs_id']
+        obs_id = int(result.loc[0,'obs_id'])
+        # Delete the old reference star
+        sql = "DELETE FROM reference_star where obs_id = %s;"
+        args = (obs_id,)
+        self.sql_interface.execute(sql,args)
+
         sql = "INSERT INTO reference_star (obs_id, source_id, process_id) VALUES (%s,%s,%s);"
         args = [(int(obs_id),int(i),int(PID)) for i in reference_star_source_id]
         #print(len(args))

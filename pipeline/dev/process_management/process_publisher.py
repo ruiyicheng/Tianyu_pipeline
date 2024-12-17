@@ -53,10 +53,12 @@ class process_publisher:
         args = (PID_sky,)
         sky_id = int(self.sql_interface.query(sql,args).loc[0,'sky_id'])
         resolve_star_pid = self.detect_source(stacked_PID,sky_id)
-        PID_reference_star = self.select_reference_star(resolve_star_pid)
+        PID_crossmatch = self.crossmatch(sky_id,dep_PIDs=[resolve_star_pid])
         PID_flux_batch = []
         for img in PID_calibrated_img:
             PID_flux_batch.append(self.extract_flux(int(img),int(resolve_star_pid)))
+
+        PID_reference_star = self.select_reference_star(resolve_star_pid,PID_crossmatch,PID_flux_extraction_list = PID_flux_batch)
         relative_photometry_list = []
         for PID_flux in PID_flux_batch:
             relative_photometry_list.append(self.relative_photometry(PID_reference_star,PID_flux))
@@ -78,11 +80,15 @@ class process_publisher:
             'PID_extract_flux':PID_extract_flux
         }
         return self.publish_CMD(self.default_site_id, self.default_group_id, f'relative_photometry|{param_dict}', [PID_reference_star,PID_extract_flux])
-    def select_reference_star(self,PID_template_generating):
+    def select_reference_star(self,PID_template_generating,PID_crossmatch,PID_flux_extraction_list=[]):
         param_dict = {
-            'PID_template_generating': PID_template_generating
+            'PID_template_generating': PID_template_generating, 'PID_crossmatch': PID_crossmatch
         }
-        return self.publish_CMD(self.default_site_id, self.default_group_id, f'select_reference_star|{param_dict}', [PID_template_generating])
+        if PID_crossmatch!=-1:
+            PID_crossmatch_list =  [PID_crossmatch]
+        else:
+            PID_crossmatch_list = []
+        return self.publish_CMD(self.default_site_id, self.default_group_id, f'select_reference_star|{param_dict}', [PID_template_generating]+PID_crossmatch_list+PID_flux_extraction_list)
     
     def extract_flux_batch(self,obs_id, resolve_id,nstack = 1):
         if nstack==1:
