@@ -129,8 +129,17 @@ ORDER BY
         print(f"{solution.best_match().scale_arcsec_per_pixel=}")
         print('searching gdr3 targets')
         Gaia_query_res = self.dl.search_GDR3_by_square(ra = solution.best_match().center_ra_deg,dec = solution.best_match().center_dec_deg, fov = 0.1+(sky_result.loc[0,'fov_x']**2+sky_result.loc[0,'fov_y']**2)**0.5/2,Gmag_limit = 20)
-        print(Gaia_query_res)
-        is_variable = (Gaia_query_res['in_vari_classification_result']==Gaia_query_res['in_vari_classification_result'])
+        print(Gaia_query_res['in_vari_classification_result'])
+        is_variable = []
+        for i in Gaia_query_res['in_vari_classification_result']:
+            print(i,type(i))
+            if i==True or i==False:
+                is_variable.append(True)
+            else:
+                is_variable.append(False)
+        is_variable = np.array(is_variable)
+        
+        print(is_variable)
         wcs = astropy.wcs.WCS(solution.best_match().wcs_fields)
         pixels = wcs.all_world2pix(
                 np.hstack([Gaia_query_res['ra'].reshape(-1,1), Gaia_query_res['dec'].reshape(-1,1)]),
