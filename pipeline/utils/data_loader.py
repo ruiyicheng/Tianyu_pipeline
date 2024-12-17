@@ -179,8 +179,7 @@ class data_loader:
         elif method == "online":
 
             sql = f'''
-            SELECT g3.source_id,g3.ra,g3.dec,g3.phot_g_mean_mag,g3.phot_g_mean_flux_over_error, g3.parallax,g3.pmra,g3.pmdec,gv.in_vari_classification_result from gaiadr3.gaia_source as g3 LEFT JOIN gaiadr3.	
-gaiadr3.vari_summary as gv on gv.source_id=g3.source_id 
+            SELECT g3.source_id,g3.ra,g3.dec,g3.phot_g_mean_mag,g3.phot_g_mean_flux_over_error, g3.parallax,g3.pmra,g3.pmdec,gv.in_vari_classification_result from gaiadr3.gaia_source as g3 LEFT JOIN gaiadr3.vari_summary as gv on gv.source_id=g3.source_id 
 WHERE g3.phot_g_mean_mag<{Gmag_limit} AND
 CONTAINS(
     POINT('ICRS',g3.ra,g3.dec),
