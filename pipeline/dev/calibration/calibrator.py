@@ -160,7 +160,7 @@ ORDER BY
             args = (source_id_this,)
             result = self.sql_interface.query(sql,args)
             update = len(result)
-            args = (int(Gaia_query_res['SOURCE_ID'][indices[i,0]]),int(Gaia_query_res['SOURCE_ID'][indices[i,1]]),int(Gaia_query_res['SOURCE_ID'][indices[i,2]]),float(distances[i,0]),float(distances[i,1]),float(distances[i,2]),int(is_variable[i,0]),int(is_variable[i,1]),int(is_variable[i,2]),int(source_id_this))
+            args = (int(Gaia_query_res['SOURCE_ID'][indices[i,0]]),int(Gaia_query_res['SOURCE_ID'][indices[i,1]]),int(Gaia_query_res['SOURCE_ID'][indices[i,2]]),float(distances[i,0]),float(distances[i,1]),float(distances[i,2]),int(is_variable[indices[i,0]]),int(is_variable[indices[i,1]]),int(is_variable[indices[i,2]]),int(source_id_this))
             if update:
                 arg_update.append(args)
                 #
