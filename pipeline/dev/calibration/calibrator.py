@@ -245,7 +245,119 @@ ORDER BY
         #return {'reference_id':reference_star_source_id,"reference_x":x_template[reference_star_indices],"reference_y":y_template[reference_star_indices]}
 
         return 1
+    def select_reference_star_and_calibrate(self,PID,template_generation_PID,dis_quantile_threshold = 0.5, minimum_marginal_deviation = 200,flux_quantile_number = 5,pos_quantile_number = 3):
+        # load database, find init reference star
+        print('Getting init reference star')
+        sql = "SELECT * FROM sky_image_map WHERE process_id = %s;"
+        args = (template_generation_PID,)
+        result = self.sql_interface.query(sql,args)
+        assert len(result)==1
+        temp_image_id = result.loc[0,'image_id']
+        # Only resolved star can be treated as reference star
+        sql = "SELECT * FROM tianyu_source_position NATURAL JOIN source_crossmatch INNER JOIN img ON img.image_id = template_img_id  WHERE template_img_id = %s;"
+        args = (int(temp_image_id),)
+        result = self.sql_interface.query(sql,args)
+        obs_id = int(result.loc[0,'obs_id'])
 
+        star_grouped_sql = 'WITH temp AS (SELECT source_id, COUNT(*) AS ct FROM star_pixel_img INNER JOIN img ON img.image_id = star_pixel_img.image_id WHERE img.obs_id = %s GROUP BY source_id), max_ct AS (SELECT MAX(ct) AS max_ct FROM temp) SELECT * FROM temp NATURAL JOIN tianyu_source_position NATURAL JOIN source_crossmatch ORDER BY source_id;'
+        args = (obs_id,)
+        source_id_complete = self.sql_interface.query(star_grouped_sql,args)
+        number_of_complete_star = len(source_id_complete)
+        N_f = int(source_id_complete.loc[0,'ct'])
+
+        x_template = np.array(source_id_complete['x_template'])
+        y_template = np.array(source_id_complete['y_template'])
+        main_is_not_variable = ~np.array(source_id_complete['gdr3_is_variable1'])
+        is_single_match = (np.array(source_id_complete['gdr3_dist2'])/np.array(source_id_complete['gdr3_dist1']))>1.5
+        #flux_template = np.array(result['flux_template'])
+        #center_star_mask = (x_template<np.max(x_template)-minimum_marginal_deviation)&(x_template>minimum_marginal_deviation)&(y_template<np.max(y_template)-minimum_marginal_deviation)&(y_template>minimum_marginal_deviation)
+        distance, index = self.find_nearest_kdtree(x_template,y_template,x_template,y_template)
+        dis_threshold = np.quantile(distance[:,1],dis_quantile_threshold)
+        reference_star_indices = np.where((distance[:,1] > dis_threshold)&is_single_match&main_is_not_variable)
+        reference_star_source_id = result.loc[reference_star_indices,'source_id']
+        # select the reference star according to iterative selection algorithm
+        reference_star_source_id = [int(i) for i in reference_star_source_id]
+        sql_create = "CREATE TEMPORARY TABLE reference_star_this (source_id BIGINT, CONSTRAINT FK_PersonOrder FOREIGN KEY (source_id) REFERENCES tianyu_source(source_id));"
+        sql_insert = "INSERT INTO reference_star_this (source_id) VALUES (%s);"
+        arg_insert = [(i,) for i in reference_star_source_id]
+        sql_query = "SELECT reference_star_this.source_id, tsp.template_img_id as template_img_id, tsp.x_template as x_template, tsp.y_template as y_template, tsp.flux_template as flux_template FROM reference_star_this INNER JOIN tianyu_source_position as tsp on reference_star_this.source_id = tsp.source_id ORDER BY reference_star_this.source_id;"
+        arg_query = ()
+        reference_star = self.sql_interface.querytemp(sql_create,sql_insert,arg_insert,sql_query,arg_query)
+        print(reference_star)
+
+
+        star_complete_source_sql = '''SELECT 
+    spi.star_pixel_img_id AS star_pixel_img_id, 
+    spi.source_id, 
+    spi.flux_raw AS flux_raw, 
+    spi.flux_raw_error AS flux_raw_error, 
+    tsp.x_template AS x_template, 
+    tsp.y_template AS y_template, 
+    tsp.flux_template AS flux_template  
+FROM 
+    star_pixel_img AS spi
+INNER JOIN 
+    tianyu_source_position AS tsp 
+    ON spi.source_id = tsp.source_id
+INNER JOIN 
+    img 
+    ON img.image_id = spi.image_id
+INNER JOIN 
+    (
+        WITH temp AS (
+            SELECT 
+                star_pixel_img.source_id, 
+                COUNT(*) AS ct 
+            FROM 
+                star_pixel_img 
+            INNER JOIN 
+                img 
+                ON img.image_id = star_pixel_img.image_id 
+            WHERE 
+                img.obs_id = %s 
+            GROUP BY 
+                star_pixel_img.source_id
+        ), 
+        max_ct AS (
+            SELECT 
+                MAX(ct) AS max_ct 
+            FROM 
+                temp
+        ) 
+        SELECT 
+            * 
+        FROM 
+            temp 
+        WHERE 
+            ct = (SELECT max_ct FROM max_ct)
+    ) AS besttab ON spi.source_id = besttab.source_id
+WHERE 
+    img.obs_id = %s
+ORDER BY 
+    spi.source_id, img.jd_utc_mid;'''
+        args = (obs_id,obs_id)
+        star_complete_source = self.sql_interface.query(star_complete_source_sql,args)
+        raw_flux_all = np.array(star_complete_source['flux_raw'].values).reshape(number_of_complete_star,N_f)
+        
+
+        # sql = "SELECT * FROM img where image_id = %s;"
+        # args = (int(image_id),)
+        # result = self.sql_interface.query(sql,args)
+        # obs_id = int(result.loc[0,'obs_id'])
+        # # Delete the old reference star
+        # sql = "DELETE FROM reference_star where obs_id = %s;"
+        # args = (obs_id,)
+        # self.sql_interface.execute(sql,args)
+
+        # sql = "INSERT INTO reference_star (obs_id, source_id, process_id) VALUES (%s,%s,%s);"
+        # args = [(int(obs_id),int(i),int(PID)) for i in reference_star_source_id]
+        # #print(len(args))
+        # self.sql_interface.executemany(sql,args)
+        # # print(reference_star_source_id,'\n',obs_id)
+        # print(sql,args)
+        #return {'reference_id':reference_star_source_id,"reference_x":x_template[reference_star_indices],"reference_y":y_template[reference_star_indices]}
+
+        return 1
         
     def relative_photometric_calibration(self,PID,PID_reference,PID_flux_extraction,flux_quantile_number = 5,pos_quantile_number = 3):
         def mask_select(df,item,bins,index):
