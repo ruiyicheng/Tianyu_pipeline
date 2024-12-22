@@ -96,6 +96,8 @@ class process_consumer:
             success = self.calibrator.crossmatch_external(par['sky_id'])
         if cmd == "select_reference_star":
             success = self.calibrator.select_reference_star(PID,par['PID_template_generating'],par['PID_crossmatch'])
+        if cmd == "select_reference_star_and_calibrate":
+            success = self.calibrator.select_reference_star_and_calibrate(PID,par['PID_template_generating'])
         if cmd == "extract_flux":
             success = self.image_processor.extract_flux(PID,par['PID_img'],par['PID_detect_source'])
         if cmd == "relative_photometry":

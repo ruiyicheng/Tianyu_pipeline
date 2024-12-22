@@ -22,8 +22,13 @@ class process_publisher:
             return self._default_group_id
     def generate_PID(self):
         return (time.time_ns()+np.random.randint(0,1000))*100000+np.random.randint(0,100000)
-    
+    def select_reference_star_and_calibrate(self,PID_template_generating,PID_crossmatch,PID_flux_extraction_list):
+        param_dict = {
+            'PID_template_generating': PID_template_generating, 'PID_crossmatch': PID_crossmatch
+        }
 
+        
+        return self.publish_CMD(self.default_site_id, self.default_group_id, f'select_reference_star_and_calibrate|{param_dict}', [PID_template_generating,PID_crossmatch]+PID_flux_extraction_list)
     # def reduction_nighty_obs(self,obs_id,PID_sub,PID_div,sky_id):
 
     #     pid_cal_list = self.calibrate_observation(obs_id,PID_sub,PID_div)

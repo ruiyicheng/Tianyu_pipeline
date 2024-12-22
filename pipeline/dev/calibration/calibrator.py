@@ -245,7 +245,18 @@ ORDER BY
         #return {'reference_id':reference_star_source_id,"reference_x":x_template[reference_star_indices],"reference_y":y_template[reference_star_indices]}
 
         return 1
-    def select_reference_star_and_calibrate(self,PID,template_generation_PID,dis_quantile_threshold = 0.5, minimum_marginal_deviation = 200,flux_quantile_number = 5,pos_quantile_number = 3):
+    def select_reference_star_and_calibrate(self,PID,template_generation_PID,dis_quantile_threshold = 0.5,mean_number_reference = 6,pos_quantile_number = 3):
+        def mask_select(item,bins,index):
+            if len(bins)<=2:
+                return np.ones(item.shape).astype(bool)
+            if index ==0:
+                mask = item<=bins[1]
+                return mask
+            if index == len(bins)-1:
+                mask = item>bins[-2]
+                return mask
+            mask = (item>bins[index]) & (item<=bins[index+1])
+            return mask
         # load database, find init reference star
         print('Getting init reference star')
         sql = "SELECT * FROM sky_image_map WHERE process_id = %s;"
@@ -254,36 +265,19 @@ ORDER BY
         assert len(result)==1
         temp_image_id = result.loc[0,'image_id']
         # Only resolved star can be treated as reference star
-        sql = "SELECT * FROM tianyu_source_position NATURAL JOIN source_crossmatch INNER JOIN img ON img.image_id = template_img_id  WHERE template_img_id = %s;"
+        sql = "SELECT * FROM tianyu_source_position NATURAL JOIN source_crossmatch INNER JOIN img ON img.image_id = template_img_id  WHERE template_img_id = %s Order by source_id;"
         args = (int(temp_image_id),)
-        result = self.sql_interface.query(sql,args)
-        obs_id = int(result.loc[0,'obs_id'])
+        all_source_info_df = self.sql_interface.query(sql,args)
+        obs_id = int(all_source_info_df.loc[0,'obs_id'])
 
-        star_grouped_sql = 'WITH temp AS (SELECT source_id, COUNT(*) AS ct FROM star_pixel_img INNER JOIN img ON img.image_id = star_pixel_img.image_id WHERE img.obs_id = %s GROUP BY source_id), max_ct AS (SELECT MAX(ct) AS max_ct FROM temp) SELECT * FROM temp NATURAL JOIN tianyu_source_position NATURAL JOIN source_crossmatch ORDER BY source_id;'
+        star_grouped_sql = 'WITH temp AS (SELECT source_id, COUNT(*) AS ct FROM star_pixel_img INNER JOIN img ON img.image_id = star_pixel_img.image_id WHERE img.obs_id = %s GROUP BY source_id), max_ct AS (SELECT MAX(ct) AS max_ct FROM temp) SELECT * FROM temp NATURAL JOIN tianyu_source_position NATURAL JOIN source_crossmatch where ct = (select max_ct from max_ct) ORDER BY source_id;'
         args = (obs_id,)
         source_id_complete = self.sql_interface.query(star_grouped_sql,args)
         number_of_complete_star = len(source_id_complete)
         N_f = int(source_id_complete.loc[0,'ct'])
+        print(source_id_complete)
+        print(number_of_complete_star,N_f)
 
-        x_template = np.array(source_id_complete['x_template'])
-        y_template = np.array(source_id_complete['y_template'])
-        main_is_not_variable = ~np.array(source_id_complete['gdr3_is_variable1'])
-        is_single_match = (np.array(source_id_complete['gdr3_dist2'])/np.array(source_id_complete['gdr3_dist1']))>1.5
-        #flux_template = np.array(result['flux_template'])
-        #center_star_mask = (x_template<np.max(x_template)-minimum_marginal_deviation)&(x_template>minimum_marginal_deviation)&(y_template<np.max(y_template)-minimum_marginal_deviation)&(y_template>minimum_marginal_deviation)
-        distance, index = self.find_nearest_kdtree(x_template,y_template,x_template,y_template)
-        dis_threshold = np.quantile(distance[:,1],dis_quantile_threshold)
-        reference_star_indices = np.where((distance[:,1] > dis_threshold)&is_single_match&main_is_not_variable)
-        reference_star_source_id = result.loc[reference_star_indices,'source_id']
-        # select the reference star according to iterative selection algorithm
-        reference_star_source_id = [int(i) for i in reference_star_source_id]
-        sql_create = "CREATE TEMPORARY TABLE reference_star_this (source_id BIGINT, CONSTRAINT FK_PersonOrder FOREIGN KEY (source_id) REFERENCES tianyu_source(source_id));"
-        sql_insert = "INSERT INTO reference_star_this (source_id) VALUES (%s);"
-        arg_insert = [(i,) for i in reference_star_source_id]
-        sql_query = "SELECT reference_star_this.source_id, tsp.template_img_id as template_img_id, tsp.x_template as x_template, tsp.y_template as y_template, tsp.flux_template as flux_template FROM reference_star_this INNER JOIN tianyu_source_position as tsp on reference_star_this.source_id = tsp.source_id ORDER BY reference_star_this.source_id;"
-        arg_query = ()
-        reference_star = self.sql_interface.querytemp(sql_create,sql_insert,arg_insert,sql_query,arg_query)
-        print(reference_star)
 
 
         star_complete_source_sql = '''SELECT 
@@ -293,7 +287,7 @@ ORDER BY
     spi.flux_raw_error AS flux_raw_error, 
     tsp.x_template AS x_template, 
     tsp.y_template AS y_template, 
-    tsp.flux_template AS flux_template  
+    tsp.flux_template AS flux_template
 FROM 
     star_pixel_img AS spi
 INNER JOIN 
@@ -332,13 +326,143 @@ INNER JOIN
             ct = (SELECT max_ct FROM max_ct)
     ) AS besttab ON spi.source_id = besttab.source_id
 WHERE 
-    img.obs_id = %s
+    img.obs_id = %s AND img.coadd_weight>0.5
 ORDER BY 
     spi.source_id, img.jd_utc_mid;'''
         args = (obs_id,obs_id)
         star_complete_source = self.sql_interface.query(star_complete_source_sql,args)
-        raw_flux_all = np.array(star_complete_source['flux_raw'].values).reshape(number_of_complete_star,N_f)
+        print(star_complete_source)
+        raw_flux_all = np.array(star_complete_source['flux_raw'].values).reshape(number_of_complete_star,-1)
+
+
+        # initial select of reference star
+
+        x_template = np.array(source_id_complete['x_template'])
+        y_template = np.array(source_id_complete['y_template'])
+        flux_template = np.array(source_id_complete['flux_template'])
+        main_is_not_variable = ~np.array(source_id_complete['gdr3_is_variable1'])
+        is_single_match = (np.array(source_id_complete['gdr3_dist2'])/np.array(source_id_complete['gdr3_dist1']))>1.5
+        #flux_template = np.array(result['flux_template'])
+        #center_star_mask = (x_template<np.max(x_template)-minimum_marginal_deviation)&(x_template>minimum_marginal_deviation)&(y_template<np.max(y_template)-minimum_marginal_deviation)&(y_template>minimum_marginal_deviation)
+        distance, index = self.find_nearest_kdtree(x_template,y_template,x_template,y_template)
+        dis_threshold = np.quantile(distance[:,1],dis_quantile_threshold)
+        mask_positive = np.all(raw_flux_all>0,axis = 1)
+        reference_star_mask = ((distance[:,1] > dis_threshold)&is_single_match&main_is_not_variable&mask_positive).astype(bool)
+        reference_star_indices = np.where(reference_star_mask)
+        reference_star_source_id = source_id_complete.loc[reference_star_indices,'source_id']
+        # select the reference star according to iterative selection algorithm
+        reference_star_source_id = [int(i) for i in reference_star_source_id]
+        # sql_create = "CREATE TEMPORARY TABLE reference_star_this (source_id BIGINT);"#,  FOREIGN KEY (source_id) REFERENCES tianyu_source(source_id));"
+        # sql_insert = "INSERT INTO reference_star_this (source_id) VALUES (%s);"
+        # arg_insert = [(i,) for i in reference_star_source_id]
+        # sql_query = "SELECT reference_star_this.source_id, tsp.template_img_id as template_img_id, tsp.x_template as x_template, tsp.y_template as y_template, tsp.flux_template as flux_template FROM reference_star_this INNER JOIN tianyu_source_position as tsp on reference_star_this.source_id = tsp.source_id ORDER BY reference_star_this.source_id;"
+        # arg_query = ()
+        # reference_star = self.sql_interface.querytemp(sql_create,sql_insert,arg_insert,sql_query,arg_query)
+        # print(reference_star)
+        #print(reference_star_mask)
+        reference_star  = source_id_complete[np.squeeze(reference_star_mask)]
         
+        raw_flux_reference_all = raw_flux_all[reference_star_indices]
+        print(raw_flux_all,raw_flux_reference_all)
+        reference_star['x_quantile'],bin_x = pd.qcut(reference_star['x_template'], pos_quantile_number, labels=False,retbins=True) 
+        reference_star['y_quantile'],bin_y = pd.qcut(reference_star['y_template'], pos_quantile_number, labels=False,retbins=True)
+        print(bin_x)
+        print(bin_y)
+        mask_reference_selected = []
+        dict_pos_flux_bin = {}
+        dict_reference_gourp = {}
+        reference_group_index = 1
+        for index_bin_x in range(len(bin_x)-1):
+            for index_bin_y in range(len(bin_y)-1):
+                mask_all_x = mask_select(x_template,bin_x,index_bin_x)
+                mask_all_y = mask_select(y_template,bin_y,index_bin_y)
+                mask_pos = mask_all_x & mask_all_y
+                mask_reference_pos = mask_pos & reference_star_mask
+                reference_star_this_pos_bin = source_id_complete[mask_reference_pos]
+                num_reference_star_this_pos_bin = len(reference_star_this_pos_bin)
+                print(len(reference_star_this_pos_bin),f'reference stars in this position; {np.sum(mask_pos)} stars in this position')
+                n_bin_flux = min(num_reference_star_this_pos_bin//mean_number_reference,int(num_reference_star_this_pos_bin**0.5))
+                quantile,bin_flux = pd.qcut(reference_star_this_pos_bin['flux_template'],n_bin_flux, labels=False,retbins=True)
+                dict_pos_flux_bin[(index_bin_x,index_bin_y)] = bin_flux
+                for index_bin_flux in range(len(bin_flux)-1):
+                    dict_reference_gourp[(index_bin_x,index_bin_y,index_bin_flux)] = reference_group_index
+                    reference_group_index+=1
+                    mask_all_flux = mask_select(flux_template,bin_flux,index_bin_flux)
+                    mask_all_this = (mask_all_flux & mask_pos).astype(bool)
+                    mask_reference_this = (mask_reference_pos & mask_all_flux).astype(bool)
+                    index_reference_this = np.where(mask_reference_this)[0]
+
+                    mask_reference_subspace = mask_reference_this[mask_all_this]
+                    index_mask_reference_subspace = np.where(mask_reference_subspace)[0]
+                    n_reference_this_bin = np.sum(mask_reference_this)
+                    star_index = np.squeeze(np.where(mask_all_this))
+                    #print(mask_reference_subspace.shape,np.sum(mask_reference_this),np.sum(mask_all_this))
+                    all_flux_this = raw_flux_all[star_index]
+                    ref_flux_this = all_flux_this[mask_reference_subspace]
+                    mask_reference_subspace_vert = mask_reference_subspace.reshape(-1,1)
+                    weight_all = (np.sum(ref_flux_this, axis =0).reshape(1,-1)-mask_reference_subspace_vert*all_flux_this)/(n_reference_this_bin-mask_reference_subspace_vert)
+                    flux_all_calibrated_this_bin = all_flux_this/weight_all
+                    mean_flux_all_calibrated = np.mean(flux_all_calibrated_this_bin , axis = 1)
+                    std_flux_all = np.std(flux_all_calibrated_this_bin , axis = 1)
+                    SNR_baseline = np.sum(mean_flux_all_calibrated/std_flux_all**2)/np.sqrt(np.sum(1/std_flux_all**2))
+                    print(f'SNR baseline = {SNR_baseline}')
+                    #print('index_mask_subspace = \n',type(index_mask_reference_subspace))
+                    mask_reference_selected.append(mask_reference_this.copy())
+                    ct_excluded = 0
+                    SNR_excluded_list = []
+                    index_reference_chosen_this_list = []
+                    for index_choose_reference,index_reference_chosen_this in zip(index_mask_reference_subspace,index_reference_this):
+                        mask_reference_subspace_excluded = mask_reference_subspace.copy()
+                        
+                        mask_reference_subspace_excluded[index_choose_reference] = 0
+                        #print(index_mask_reference_subspace)
+                        ref_flux_excluded_this = all_flux_this[mask_reference_subspace_excluded]
+                        mask_reference_subspace_excluded_vert = mask_reference_subspace_excluded.reshape(-1,1)
+                        #print((n_reference_this_bin-1-mask_reference_subspace_excluded_vert))
+                        weight_excluded_all = (np.sum(ref_flux_excluded_this, axis =0).reshape(1,-1)-mask_reference_subspace_excluded_vert*all_flux_this)/(n_reference_this_bin-1-mask_reference_subspace_excluded_vert)
+                        flux_all_calibrated_this_excluded_bin = all_flux_this/weight_excluded_all
+                        mean_flux_all_excluded_calibrated = np.mean(flux_all_calibrated_this_excluded_bin , axis = 1)
+                        std_flux_excluded_all = np.std(flux_all_calibrated_this_excluded_bin , axis = 1)  
+                        SNR_excluded = np.sum(mean_flux_all_excluded_calibrated/std_flux_excluded_all**2)/np.sqrt(np.sum(1/std_flux_excluded_all**2))     
+                        print(f'Excluded SNR = {SNR_excluded}')   
+                        SNR_excluded_list.append(SNR_excluded)
+                        index_reference_chosen_this_list.append(index_reference_chosen_this)  
+                        # if SNR_excluded>SNR_baseline:
+                        #     mask_reference_selected[-1][index_reference_chosen_this] = 0
+                        #     ct_excluded+=1
+                    SNR_excluded_list = np.array(SNR_excluded_list)
+                    index_reference_chosen_this_list = np.array(index_reference_chosen_this_list,dtype = int)
+                    if np.sum(SNR_excluded_list<SNR_baseline)>=2:
+                        ct_excluded = np.sum(SNR_excluded_list>=SNR_baseline)
+                        mask_reference_selected[-1][index_reference_chosen_this_list[SNR_excluded_list>=SNR_baseline]] = 0
+                    else:
+                        mask_reference_selected[-1][index_reference_chosen_this_list[np.argsort(SNR_excluded_list)[2:]]] = 0
+                        ct_excluded = len(index_mask_reference_subspace)-2
+                    print(f'{ct_excluded} reference star excluded!')
+        mask_reference_selected = np.array(mask_reference_selected)
+        print(mask_reference_selected.shape)
+        mask_reference = np.any(mask_reference_selected,axis = 0)
+        print(np.sum(mask_reference))
+
+        reference_star_indices = np.where(mask_reference)
+        reference_star_source_id = source_id_complete.loc[reference_star_indices,'source_id']
+        reference_star_source_id = [int(i) for i in reference_star_source_id]
+        sql_create = "CREATE TEMPORARY TABLE reference_star_this (source_id BIGINT);"#,  FOREIGN KEY (source_id) REFERENCES tianyu_source(source_id));"
+        sql_insert = "INSERT INTO reference_star_this (source_id) VALUES (%s);"
+        arg_insert = [(i,) for i in reference_star_source_id]
+        sql_query = "SELECT tsp.source_id, tsp.x_template AS x_template, tsp.y_template AS y_template, tsp.flux_template AS flux_template,IF(rst.source_id IS NULL, False,True) as is_reference FROM tianyu_source_position as tsp LEFT JOIN reference_star_this as rst ON rst.source_id = tsp.source_id  WHERE template_img_id = %s ;"
+        args = (int(temp_image_id),)
+        reference_star = self.sql_interface.querytemp(sql_create,sql_insert,arg_insert,sql_query,args)
+        print(np.sum(reference_star['is_reference']))
+        #print(reference_star_mask)
+        print(all_source_info_df)
+        reference_star  = source_id_complete[np.squeeze(reference_star_mask)]
+
+
+
+
+
+
 
         # sql = "SELECT * FROM img where image_id = %s;"
         # args = (int(image_id),)
@@ -393,6 +517,7 @@ ORDER BY
         # print(raw_flux)
         # print(raw_flux.columns)
         args_calibration = []
+        
         for index_flux in range(len(bin_flux)-1):
             for index_bin_x in range(len(bin_x)-1):
                 for index_bin_y in range(len(bin_y)-1):
