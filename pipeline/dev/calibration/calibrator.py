@@ -370,7 +370,7 @@ ORDER BY
         print(bin_y)
         mask_reference_selected = []
         dict_pos_flux_bin = {}
-        dict_reference_gourp = {}
+        dict_reference_group = {}
         reference_group_index = 1
         for index_bin_x in range(len(bin_x)-1):
             for index_bin_y in range(len(bin_y)-1):
@@ -385,7 +385,7 @@ ORDER BY
                 quantile,bin_flux = pd.qcut(reference_star_this_pos_bin['flux_template'],n_bin_flux, labels=False,retbins=True)
                 dict_pos_flux_bin[(index_bin_x,index_bin_y)] = bin_flux
                 for index_bin_flux in range(len(bin_flux)-1):
-                    dict_reference_gourp[(index_bin_x,index_bin_y,index_bin_flux)] = reference_group_index
+                    dict_reference_group[(index_bin_x,index_bin_y,index_bin_flux)] = reference_group_index
                     reference_group_index+=1
                     mask_all_flux = mask_select(flux_template,bin_flux,index_bin_flux)
                     mask_all_this = (mask_all_flux & mask_pos).astype(bool)
@@ -404,7 +404,7 @@ ORDER BY
                     flux_all_calibrated_this_bin = all_flux_this/weight_all
                     mean_flux_all_calibrated = np.mean(flux_all_calibrated_this_bin , axis = 1)
                     std_flux_all = np.std(flux_all_calibrated_this_bin , axis = 1)
-                    SNR_baseline = np.sum(mean_flux_all_calibrated/std_flux_all**2)/np.sqrt(np.sum(1/std_flux_all**2))
+                    SNR_baseline = np.sum(np.abs(mean_flux_all_calibrated)/std_flux_all**2)/np.sqrt(np.sum(1/std_flux_all**2))
                     print(f'SNR baseline = {SNR_baseline}')
                     #print('index_mask_subspace = \n',type(index_mask_reference_subspace))
                     mask_reference_selected.append(mask_reference_this.copy())
@@ -439,27 +439,67 @@ ORDER BY
                         mask_reference_selected[-1][index_reference_chosen_this_list[np.argsort(SNR_excluded_list)[2:]]] = 0
                         ct_excluded = len(index_mask_reference_subspace)-2
                     print(f'{ct_excluded} reference star excluded!')
+        print('reference star selection complete!')
         mask_reference_selected = np.array(mask_reference_selected)
         print(mask_reference_selected.shape)
         mask_reference = np.any(mask_reference_selected,axis = 0)
+        mask_group = np.sum(mask_reference_selected*(np.arange(len(mask_reference_selected))+1).reshape(-1,1),axis = 0)
         print(np.sum(mask_reference))
 
         reference_star_indices = np.where(mask_reference)
         reference_star_source_id = source_id_complete.loc[reference_star_indices,'source_id']
         reference_star_source_id = [int(i) for i in reference_star_source_id]
+        reference_star_group = mask_group[mask_reference]
+        reference_star_group = [int(i) for i in reference_star_group]
         sql_create = "CREATE TEMPORARY TABLE reference_star_this (source_id BIGINT);"#,  FOREIGN KEY (source_id) REFERENCES tianyu_source(source_id));"
         sql_insert = "INSERT INTO reference_star_this (source_id) VALUES (%s);"
         arg_insert = [(i,) for i in reference_star_source_id]
         sql_query = "SELECT tsp.source_id, tsp.x_template AS x_template, tsp.y_template AS y_template, tsp.flux_template AS flux_template,IF(rst.source_id IS NULL, False,True) as is_reference FROM tianyu_source_position as tsp LEFT JOIN reference_star_this as rst ON rst.source_id = tsp.source_id  WHERE template_img_id = %s ;"
         args = (int(temp_image_id),)
-        reference_star = self.sql_interface.querytemp(sql_create,sql_insert,arg_insert,sql_query,args)
-        print(np.sum(reference_star['is_reference']))
-        #print(reference_star_mask)
-        print(all_source_info_df)
-        reference_star  = source_id_complete[np.squeeze(reference_star_mask)]
+        all_star = self.sql_interface.querytemp(sql_create,sql_insert,arg_insert,sql_query,args)
+        print(np.sum(all_star['is_reference']))
+        reference_star_mask = np.array(all_star['is_reference']).astype(bool)
+        source_id_list = np.array(all_star['source_id']).astype(int)
+        x_template = np.array(all_star['x_template'])
+        y_template = np.array(all_star['y_template'])
+        flux_template = np.array(all_star['flux_template'])
+        
+        # calculate the relative flux of all stars, regardless whether it is fully observed
+        # Obtain the raw flux of all stars
+        sql = "SELECT * FROM img where obs_id = %s and align_process_id = align_process_id order by jd_utc_mid;"
+        args = (obs_id,)
+        images_df = self.sql_interface.query(sql,args)
+        image_id_list = np.array(images_df['image_id']).astype(int)
+        image_id_index_dict = {}
+        for i in range(len(image_id_list)):
+            image_id_index_dict[image_id_list[i]] = i
+        source_id_index_dict = {}
+        for i in range(len(source_id_list)):
+            source_id_index_dict[source_id_list[i]] = i
+        N_star = len(all_star)
+        N_epoch = len(images_df)
+
+        flux_array = np.full(N_star,N_epoch, np.nan)
+        flux_error_array = np.full(N_star,N_epoch, np.nan)
+        
+        print('download raw flux')
+        sql = "SELECT img.image_id as image_id, spi.source_id as source_id, flux_raw, flux_raw_error FROM star_pixel_img as spi INNER JOIN img ON img.image_id = spi.image_id  where img.obs_id = %s order by source_id, img.jd_utc_mid;"
+        args = (obs_id,)
+        raw_flux = self.sql_interface.query(sql,args)
+        print('loading flux')
+
+        for i,j in raw_flux.iterrows():
+            flux_array[source_id_index_dict[j['source_id']],image_id_index_dict[j['image_id']]] = float(j['flux_raw'])
+            flux_error_array[source_id_index_dict[j['source_id']],image_id_index_dict[j['image_id']]] = float(j['flux_raw_error'])
+        print('load flux complete')
+        for index_bin_x in range(len(bin_x)-1):
+            for index_bin_y in range(len(bin_y)-1):
+                bin_flux = dict_pos_flux_bin[(index_bin_x,index_bin_y)]
+                for index_bin_flux in range(len(bin_flux)-1):
+                    reference_group_index_this = dict_reference_group[(index_bin_x,index_bin_y,index_bin_flux)]
 
 
-
+        
 
 
 
