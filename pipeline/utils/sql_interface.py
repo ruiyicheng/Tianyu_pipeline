@@ -1,11 +1,20 @@
 import mysql.connector
 import pandas as pd
 class sql_interface:
-    def __init__(self):
+    def __init__(self,user='tianyu', password='tianyu',
+                            host='192.168.1.107',
+                            database='tianyudev'):
+        self.user = user
+        self.password = password
+        self.host = host
+        self.database = database
+
         self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
                             host='192.168.1.107',
                             database='tianyudev')
-
+    # @property
+    # def cnx(self):
+    #     return mysql.connector.connect(user='tianyu', password='tianyu',host='192.168.1.107',database='tianyudev')
     @property
     def observation_type_id(self):
         if not hasattr(self,"_observation_type_id"):
@@ -39,9 +48,9 @@ class sql_interface:
             return self._observer_id  
              
     def get_table_dict(self,table,index_key=1,index_value=0):
-        self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
-                            host='192.168.1.107',
-                            database='tianyudev')
+        self.cnx = mysql.connector.connect(user=self.user, password=self.password,
+                            host=self.host,
+                            database=self.database)
         mycursor = self.cnx.cursor()
         mycursor.execute("SELECT * from "+table+";")
         myresult = mycursor.fetchall()
@@ -51,8 +60,8 @@ class sql_interface:
             res_dict[row[index_key]] = row[index_value]
         return res_dict
     def execute(self, sql, args, return_last_id=False,db = 'tianyudev'):
-        with mysql.connector.connect(user='tianyu', password='tianyu',
-                            host='192.168.1.107',
+        with mysql.connector.connect(user=self.user, password=self.password,
+                            host=self.host,
                             database = db) as cnx:
             with cnx.cursor() as mycursor:
                 mycursor.execute(sql, args)
@@ -61,17 +70,37 @@ class sql_interface:
                     mycursor.execute("SELECT LAST_INSERT_ID()")
                     last_id = mycursor.fetchone()[0]
                     return last_id
+                
     def executemany(self, sql, args,db = 'tianyudev'):
-        with mysql.connector.connect(user='tianyu', password='tianyu',
-                            host='192.168.1.107',
+        with mysql.connector.connect(user=self.user, password=self.password,
+                            host=self.host,
                             database = db) as cnx:
             with cnx.cursor() as mycursor:
                 mycursor.executemany(sql, args)
                 cnx.commit()
-
+    def querytemp(self,sql_create,sql_insert,arg_insert,sql_query,arg_query,return_df = True,db = 'tianyudev'):
+        if "TEMPORARY" not in sql_create.upper():
+            print('CREATE TEMPORARY TABLE should be used!')
+            return -1
+        with mysql.connector.connect(user=self.user, password=self.password,
+                            host=self.host,
+                            database = db) as cnx:
+            with cnx.cursor() as mycursor:
+                mycursor.execute(sql_create)
+                mycursor.executemany(sql_insert,arg_insert)
+                cnx.commit()
+                mycursor.execute(sql_query,arg_query)
+                myresult = mycursor.fetchall()
+                headers = [i[0] for i in mycursor.description]
+                if return_df:
+                    df = pd.DataFrame(myresult)
+                    if len(df)>0:
+                        df.columns = headers
+                    return df
+                return myresult,headers
     def query(self,sql,args,return_df = True,db = 'tianyudev'):
-        self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
-                            host='192.168.1.107',
+        self.cnx = mysql.connector.connect(user=self.user, password=self.password,
+                            host=self.host,
                             database=db)
         self.cnx.commit()
         mycursor = self.cnx.cursor()
