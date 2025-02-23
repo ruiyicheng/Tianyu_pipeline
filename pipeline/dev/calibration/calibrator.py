@@ -247,14 +247,20 @@ ORDER BY
         return 1
     def select_reference_star_and_calibrate(self,PID,template_generation_PID,dis_quantile_threshold = 0.5,mean_number_reference = 6,pos_quantile_number = 3):
         def mask_select(item,bins,index):
+            #print(index,bins)
+            eps = 1e-7
             if len(bins)<=2:
+                #print('only two bin')
                 return np.ones(item.shape).astype(bool)
             if index ==0:
-                mask = item<=bins[1]
+                #print('first bin')
+                mask = item<=bins[1]#+eps
                 return mask
-            if index == len(bins)-1:
-                mask = item>bins[-2]
+            if index == len(bins)-2:
+                #print('last bin')
+                mask = item>bins[-2]#-eps
                 return mask
+            print('middle bin')
             mask = (item>bins[index]) & (item<=bins[index+1])
             return mask
         # load database, find init reference star
@@ -441,10 +447,10 @@ ORDER BY
                     print(f'{ct_excluded} reference star excluded!')
         print('reference star selection complete!')
         mask_reference_selected = np.array(mask_reference_selected)
-        print(mask_reference_selected.shape)
+        #print(mask_reference_selected.shape)
         mask_reference = np.any(mask_reference_selected,axis = 0)
         mask_group = np.sum(mask_reference_selected*(np.arange(len(mask_reference_selected))+1).reshape(-1,1),axis = 0)
-        print(np.sum(mask_reference))
+        #print(mask_group)
 
         reference_star_indices = np.where(mask_reference)
         reference_star_source_id = source_id_complete.loc[reference_star_indices,'source_id']
@@ -458,11 +464,13 @@ ORDER BY
         args = (int(temp_image_id),)
         all_star = self.sql_interface.querytemp(sql_create,sql_insert,arg_insert,sql_query,args)
         print(np.sum(all_star['is_reference']))
+        print('total number of star is',len(all_star))
         reference_star_mask = np.array(all_star['is_reference']).astype(bool)
         source_id_list = np.array(all_star['source_id']).astype(int)
-        x_template = np.array(all_star['x_template'])
-        y_template = np.array(all_star['y_template'])
-        flux_template = np.array(all_star['flux_template'])
+        x_template = np.array(all_star['x_template']).astype(np.float64)
+        y_template = np.array(all_star['y_template']).astype(np.float64)
+        flux_template = np.array(all_star['flux_template']).astype(np.float64)
+        print('number of stars is ',x_template.shape,np.sum(1-np.isnan(x_template)))
         
         # calculate the relative flux of all stars, regardless whether it is fully observed
         # Obtain the raw flux of all stars
@@ -479,24 +487,65 @@ ORDER BY
         N_star = len(all_star)
         N_epoch = len(images_df)
 
-        flux_array = np.full(N_star,N_epoch, np.nan)
-        flux_error_array = np.full(N_star,N_epoch, np.nan)
-        
+        flux_array = np.full((N_star,N_epoch), np.nan,np.float64)
+        flux_error_array = np.full((N_star,N_epoch), np.nan,np.float64)
+        flux_id = np.full((N_star,N_epoch), np.nan,int)
+        cal_flux_array = np.full((N_star,N_epoch), np.nan,np.float64)
+        cal_flux_error_array = np.full((N_star,N_epoch), np.nan,np.float64)
+        cal_group_array = np.full((N_star,N_epoch), 0,int)
+        print(flux_array.shape)
         print('download raw flux')
-        sql = "SELECT img.image_id as image_id, spi.source_id as source_id, flux_raw, flux_raw_error FROM star_pixel_img as spi INNER JOIN img ON img.image_id = spi.image_id  where img.obs_id = %s order by source_id, img.jd_utc_mid;"
+        sql = "SELECT spi.star_pixel_img_id, img.image_id as image_id, spi.source_id as source_id, flux_raw, flux_raw_error FROM star_pixel_img as spi INNER JOIN img ON img.image_id = spi.image_id  where img.obs_id = %s order by source_id, img.jd_utc_mid;"
         args = (obs_id,)
         raw_flux = self.sql_interface.query(sql,args)
         print('loading flux')
 
         for i,j in raw_flux.iterrows():
+            flux_id[source_id_index_dict[j['source_id']],image_id_index_dict[j['image_id']]] = int(j['star_pixel_img_id'])
             flux_array[source_id_index_dict[j['source_id']],image_id_index_dict[j['image_id']]] = float(j['flux_raw'])
             flux_error_array[source_id_index_dict[j['source_id']],image_id_index_dict[j['image_id']]] = float(j['flux_raw_error'])
+        print(np.sum(1-np.isnan(flux_array)))
+        print(len(raw_flux))
+        filled_flux = np.nan_to_num(flux_array)
         print('load flux complete')
+        s_star = 0
+        loc_star = 0
+        used_group = []
         for index_bin_x in range(len(bin_x)-1):
             for index_bin_y in range(len(bin_y)-1):
+                mask_x = mask_select(x_template,bin_x,index_bin_x)
+                mask_y = mask_select(y_template,bin_y,index_bin_y)
+                loc_star += np.sum(mask_x & mask_y)
                 bin_flux = dict_pos_flux_bin[(index_bin_x,index_bin_y)]
                 for index_bin_flux in range(len(bin_flux)-1):
                     reference_group_index_this = dict_reference_group[(index_bin_x,index_bin_y,index_bin_flux)]
+                    used_group.append(reference_group_index_this)
+                    mask_flux = mask_select(flux_template,bin_flux,index_bin_flux)
+                    mask_this_bin = (mask_x & mask_y & mask_flux).astype(bool)
+                    ind_this = np.where(mask_this_bin)
+                    s_star += np.sum(mask_this_bin)
+                    
+                    mask_reference_this = (reference_star_mask & mask_this_bin).astype(bool)
+                    mask_reference_subspace = mask_reference_this[mask_this_bin].astype(bool)
+                    index_mask_reference_subspace = np.where(mask_reference_subspace)[0]
+                    
+                    
+                    N_ref = np.sum(mask_reference_this)
+                    filled_flux_this = filled_flux[ind_this]
+                    mask_reference_subspace_vert = mask_reference_subspace.reshape(-1,1)
+                    #print(flux_array[ind_this])
+                    weight = (np.sum(filled_flux_this[mask_reference_subspace],axis = 0).reshape(1,-1)-mask_reference_subspace_vert*filled_flux_this)/(N_ref-mask_reference_subspace_vert)
+                    #print('weight = ',weight)
+                    cal_flux_array[ind_this] = flux_array[ind_this].copy()/weight
+                    cal_flux_error_array[ind_this] = flux_error_array[ind_this].copy()/weight
+                    cal_group_array[ind_this] = reference_group_index_this
+        # print(s_star)
+        # print(np.sum(1-np.isnan(cal_flux_array)))
+        # print(cal_group_array)
+        # print(set(range(1,reference_group_index))-set(used_group))
+        # print(loc_star)
+                    
+
 
 
         
@@ -509,18 +558,28 @@ ORDER BY
         # result = self.sql_interface.query(sql,args)
         # obs_id = int(result.loc[0,'obs_id'])
         # # Delete the old reference star
-        # sql = "DELETE FROM reference_star where obs_id = %s;"
-        # args = (obs_id,)
-        # self.sql_interface.execute(sql,args)
+        print('registering reference star')
+        sql = "DELETE FROM reference_star where obs_id = %s;"
+        args = (obs_id,)
+        self.sql_interface.execute(sql,args)
 
-        # sql = "INSERT INTO reference_star (obs_id, source_id, process_id) VALUES (%s,%s,%s);"
-        # args = [(int(obs_id),int(i),int(PID)) for i in reference_star_source_id]
-        # #print(len(args))
-        # self.sql_interface.executemany(sql,args)
-        # # print(reference_star_source_id,'\n',obs_id)
-        # print(sql,args)
-        #return {'reference_id':reference_star_source_id,"reference_x":x_template[reference_star_indices],"reference_y":y_template[reference_star_indices]}
-
+        sql = "INSERT INTO reference_star (obs_id, reference_group,source_id, process_id) VALUES (%s,%s,%s,%s);"
+        args = [(int(obs_id),int(reference_star_group[i]),int(reference_star_source_id[i]),int(PID)) for i in range(len(reference_star_source_id))]
+        #print(len(args))
+        self.sql_interface.executemany(sql,args)
+        # print(reference_star_source_id,'\n',obs_id)
+        print(sql,args)
+        print('generating flux sql')
+        sql = "UPDATE star_pixel_img SET flux_relative = %s,flux_relative_error = %s,reference_group=%s, relative_process_id = %s where star_pixel_img_id = %s; "
+        
+        mask = np.where(~np.isnan(cal_flux_array))
+        cal_flux = np.squeeze(cal_flux_array[mask])
+        cal_flux_error = np.squeeze(cal_flux_error_array[mask])
+        cal_group = np.squeeze(cal_group_array[mask])
+        starpixelids = np.squeeze(flux_id[mask])
+        print('inserting relative flux into sql')
+        args = [[float(cal_flux[i]),float(cal_flux_error[i]),int(cal_group[i]),int(PID),int(starpixelids[i])] for i in range(len(cal_flux))]
+        self.sql_interface.executemany(sql,args)
         return 1
         
     def relative_photometric_calibration(self,PID,PID_reference,PID_flux_extraction,flux_quantile_number = 5,pos_quantile_number = 3):
