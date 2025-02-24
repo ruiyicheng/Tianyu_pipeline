@@ -1,6 +1,5 @@
 # Monitor the resource usage of python processes
-ext=0
-trap 'echo logged off at $(date +"%Y-%m-%dT%H:%M:%S%z"); exit; ext=1' INT
+trap 'echo logged off at $(date +"%Y-%m-%dT%H:%M:%S%z"); exit;' INT
 echo "PID,cpu,memory,time,process_name,disk_read_kb,disk_write_kb,time" > "monitor$$.csv"
 while true
     do
@@ -19,10 +18,5 @@ while true
         final_line=$(echo "$line $pydisk")
         echo $final_line $time_now | sed 's/ /,/g' >> "monitor$$.csv"
     done <<< "$all_cpu_mem"
-    if [ $ext -eq 1 ]
-    then
-        echo 'Bye'
-        exit
-    fi
 done
 # mysqld_pid=
