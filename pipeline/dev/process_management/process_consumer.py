@@ -14,12 +14,13 @@ from Tianyu_pipeline.pipeline.image_process import image_processor as image_proc
 from Tianyu_pipeline.pipeline.dev.calibration import calibrator as calibrator
 class process_consumer:
     def __init__(self,mode = 'test',pika_host = "192.168.1.107",site_id=1,group_id = 1,host_sql = '192.168.1.107',user_sql = 'tianyu', password_sql = 'tianyu'):
+
         self.sql_interface = sql_interface.sql_interface()
         self.image_processor = image_processor.image_processor()
         self.pika_host = pika_host
         self.site_id, self.group_id = site_id,group_id
         self.connection = pika.BlockingConnection(
-        pika.ConnectionParameters(host=self.pika_host))
+        pika.ConnectionParameters(host=self.pika_host,heartbeat = 3000,blocked_connection_timeout=10000))
         self.channel = self.connection.channel()
         self.dl = dl.data_loader()
         self.fs = fs.file_system()

@@ -1,4 +1,4 @@
-target_name,ra,dec,azi,alt,exposure_s,delay_between_frame_s,n_max_frames,jd_utc_begin,jd_utc_end,obs_process_id
-bias,,,,0,0,0,1,2460741.85,2460741.95,-1
-flat,,,90,75,10,0.0,1,2460742.01,2460742.015,-1
-XO-4,110.3881675,58.26808611111111,,,1,100.0,500,2460742.2,2460742.4,-1
+target_name,ra,dec,azi,alt,exposure_s,delay_between_frame_s,n_max_frames,jd_utc_begin,jd_utc_end,obs_process_id,astrometry_solve,use_subpixel,last_of_this_obs
+bias,,,,0,0,0,1,2460741.85,2460741.95,-1,0,0,1
+flat,,,90,75,10,0.0,1,2460742.01,2460742.015,-1,0,0,1
+XO-4,110.3881675,58.26808611111111,,,1,100.0,500,2460742.2,2460742.4,123456,1,1,1
