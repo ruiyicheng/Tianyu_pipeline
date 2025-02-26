@@ -12,7 +12,7 @@ while true
         # Add your processing logic here
         python_pid=$(echo "$line" | cut -d' ' -f1)
         #echo $python_pid
-        time_now=$(date +"%Y-%m-%dT%H:%M:%S%z")
+        time_now=$(date +"%Y-%m-%dT%H:%M:%S")
         pydisk="$(sudo iotop -b -p "$python_pid" -n 1 -k -P -qqq | sed 's/  */ /g' | sed 's/^ *//g'| cut -d' ' -f4,6)"
         #echo $pydisk
         final_line=$(echo "$line $pydisk")
