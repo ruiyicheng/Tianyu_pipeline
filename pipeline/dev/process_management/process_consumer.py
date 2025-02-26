@@ -34,11 +34,12 @@ class process_consumer:
         # Setup logging for performance metrics
         self.logger = logging.getLogger('process_consumer_metrics')
         self.logger.setLevel(logging.INFO)
-        file_handler = logging.FileHandler(log_file)
+        file_handler = logging.FileHandler(f"{os.getpid()}.log")
+        #set the format of the log, the time and the message
         formatter = logging.Formatter('%(asctime)s,%(message)s')
         file_handler.setFormatter(formatter)
         self.logger.addHandler(file_handler)
-        self.logger.info("linux_pid,process_id,command,parameters,start_time,end_time,duration_seconds,status")
+        self.logger.info("linux_pid,process_id,command,start_time,end_time,duration_seconds,status")
         
         # Record this process's Linux PID
         self.linux_pid = os.getpid()
@@ -124,7 +125,7 @@ class process_consumer:
         duration = (end_time - start_time).total_seconds()
         
         # Log performance metrics
-        self.logger.info(f"{self.linux_pid},{PID},{cmd},{json.dumps(par)},{start_time.isoformat()},{end_time.isoformat()},{duration},{status}")
+        self.logger.info(f"{self.linux_pid},{PID},{cmd},{start_time.isoformat()},{end_time.isoformat()},{duration},{status}")
         #time.sleep(0.5)
         #return 0
         if success:
