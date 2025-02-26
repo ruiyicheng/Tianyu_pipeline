@@ -5,6 +5,9 @@ import pandas as pd
 import mysql.connector
 import json
 import socket
+import os
+import datetime
+import logging
 
 from Tianyu_pipeline.pipeline.utils import data_loader as dl
 from Tianyu_pipeline.pipeline.utils import sql_interface
@@ -27,7 +30,19 @@ class process_consumer:
         self.ft = dt.file_transferer()
         self.calibrator = calibrator.calibrator()
         self.channel.queue_declare(queue=f'command_queue_{self.site_id}_{self.group_id}', durable=True)
+
+        # Setup logging for performance metrics
+        self.logger = logging.getLogger('process_consumer_metrics')
+        self.logger.setLevel(logging.INFO)
+        file_handler = logging.FileHandler(log_file)
+        formatter = logging.Formatter('%(asctime)s,%(message)s')
+        file_handler.setFormatter(formatter)
+        self.logger.addHandler(file_handler)
+        self.logger.info("linux_pid,process_id,command,parameters,start_time,end_time,duration_seconds,status")
         
+        # Record this process's Linux PID
+        self.linux_pid = os.getpid()
+        print(f"Process Consumer started with Linux PID: {self.linux_pid}")       
 
     def resolve_msg(self,msg):
         res = msg.split("|")
@@ -44,6 +59,7 @@ class process_consumer:
         return PID,cmd,par
     def work(self,PID,cmd,par):
         print(f'Executing process {PID}, command {cmd} with parameter {par}')
+        start_time = datetime.datetime.now()
         if cmd == 'stack':
             if not "PID_type" in par:
                 PID_type = "birth"
@@ -104,7 +120,11 @@ class process_consumer:
         if cmd == "relative_photometry":
             success = self.calibrator.relative_photometric_calibration(PID,par['PID_reference_star'],par['PID_extract_flux'])
         #if cmd == "extract_flux":
-
+        end_time = datetime.datetime.now()
+        duration = (end_time - start_time).total_seconds()
+        
+        # Log performance metrics
+        self.logger.info(f"{self.linux_pid},{PID},{cmd},{json.dumps(par)},{start_time.isoformat()},{end_time.isoformat()},{duration},{status}")
         #time.sleep(0.5)
         #return 0
         if success:
@@ -139,6 +159,7 @@ class process_consumer:
     def run(self):
         self.channel.basic_qos(prefetch_count=1)
         self.channel.basic_consume(queue=f'command_queue_{self.site_id}_{self.group_id}' , on_message_callback=self.callback)
+        print(f"[*] Process consumer with Linux PID {self.linux_pid} waiting for messages.")
         self.channel.start_consuming()
 #
 #pc = process_consumer()
