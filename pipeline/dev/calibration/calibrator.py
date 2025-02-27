@@ -4,7 +4,7 @@ import mysql.connector
 import numpy as np
 from astropy.io import fits
 import glob
-from tqdm import tqdm
+import tqdm
 import time
 import sep
 import pandas as pd
@@ -579,13 +579,21 @@ ORDER BY
         starpixelids = np.squeeze(flux_id[mask])
         print('inserting relative flux into sql')
         args = [[float(cal_flux[i]),float(cal_flux_error[i]),int(cal_group[i]),int(PID),int(starpixelids[i])] for i in range(len(cal_flux))]
-        self.sql_interface.executemany(sql,args)
-        return 1
+        #self.sql_interface.executemany(sql,args)
+        batch_size = 4000
+        self.sql_interface.execute('SET foreign_key_checks = 0;',[])
+        for i in tqdm.tqdm(range(0, len(args), batch_size)):
+            print(f'{i}th batch')
+            batch_args = args[i:i+batch_size]
+            self.sql_interface.executemany(sql, batch_args)
         
+        self.sql_interface.execute('SET foreign_key_checks = 1;',[])
+        return 1
+    
     def relative_photometric_calibration(self,PID,PID_reference,PID_flux_extraction,flux_quantile_number = 5,pos_quantile_number = 3):
         def mask_select(df,item,bins,index):
             if index ==0:
-                mask = df[item]<=bins[1]
+                mask =  df[item]<=bins[1]
                 return mask
             if index == len(bins)-1:
                 mask = df[item]>bins[-2]

@@ -57,5 +57,5 @@ class deleter:
 
 
 
-dl = deleter()
-dl.files()
+# dl = deleter()
+# dl.files()
