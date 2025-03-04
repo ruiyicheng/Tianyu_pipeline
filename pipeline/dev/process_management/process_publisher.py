@@ -62,13 +62,14 @@ class process_publisher:
         PID_flux_batch = []
         for img in PID_calibrated_img:
             PID_flux_batch.append(self.extract_flux(int(img),int(resolve_star_pid)))
+        PID_calibrated = self.select_reference_star_and_calibrate(resolve_star_pid,PID_crossmatch,PID_flux_batch)
 
-        PID_reference_star = self.select_reference_star(resolve_star_pid,PID_crossmatch,PID_flux_extraction_list = PID_flux_batch)
-        relative_photometry_list = []
-        for PID_flux in PID_flux_batch:
-            relative_photometry_list.append(self.relative_photometry(PID_reference_star,PID_flux))
+        # PID_reference_star = self.select_reference_star(resolve_star_pid,PID_crossmatch,PID_flux_extraction_list = PID_flux_batch)
+        # relative_photometry_list = []
+        # for PID_flux in PID_flux_batch:
+        #     relative_photometry_list.append(self.relative_photometry(PID_reference_star,PID_flux))
 
-        return relative_photometry_list
+        return PID_calibrated
     def relative_photometry_batch(self,obs_id):
         sql = "SELECT * FROM reference_star where obs_id = %s LIMIT 1;"
         args = (obs_id,)
