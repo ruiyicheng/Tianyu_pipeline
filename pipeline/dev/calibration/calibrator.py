@@ -204,8 +204,95 @@ ORDER BY
             #plt.scatter(np.squeeze(distances[:,0])[kmeans.labels_==2],np.squeeze(distances[:,1])[kmeans.labels_==2])
             plt.show()
         return 1
-    def absolute_photometric_calibration(self):
-        pass
+    def absolute_photometric_calibration_single_frame(self,PID_this,flux_PID,show = True):
+        # Get the raw flux of the flux_PID
+        def design_matrix(stars):
+            x = np.array(stars['normalized_x']).reshape(-1,1)
+            y = np.array(stars['normalized_y']).reshape(-1,1)
+            g_b = np.array(stars['phot_g_mean_mag']).reshape(-1,1)-np.array(stars['phot_bp_mean_mag']).reshape(-1,1)
+            g_r = np.array(stars['phot_g_mean_mag']).reshape(-1,1)-np.array(stars['phot_rp_mean_mag']).reshape(-1,1)
+            ones = np.ones_like(x)
+            design_matrix = np.hstack([ones,x,y,x**2,y**2,x**3,y**3,x*y,x*y**2,x**2*y,g_b,g_b**2,g_r,g_r**2,g_b*g_r])
+            return design_matrix
+
+        def calculate_prediction(coefficients,stars):
+            coefficients = np.array(coefficients).reshape(-1,1)
+            design_matrix_this = design_matrix(stars)
+            prediction = np.dot(design_matrix_this,coefficients)
+            
+            return prediction
+        def fit_and_filter(used_star):
+            # flux calibration using Gaia Data, return the mask of outliers
+            # model: mg_gaia = -2.5log10(flux_raw)+C+a1 x+b1 y+ a2 x^2 + b2 y^2 + a3 x^3 + b3 y^3 + c11 xy + c12 xy^2 + c21 x^2y + cb1(mg-mb) + cb2(mg-mb)^2 +cr1(mg-mr) + cr2(mg-mr)^2 +cbr(mg-mr)(mg-mb)
+            # chi2 = (mg_gaia-mg_gaia_model)^2/sigma^2; sigma = 1/phot_g_mean_flux_over_error*2.5/log(10)
+            # mask the outliers that have abs((mg_gaia-mg_gaia_model)/sigma)>3
+            # return the mask and coefficients
+            base_mag = -2.5*np.log10(np.array(used_star['flux_raw']).reshape(-1,1))
+            base_mag_error = np.squeeze(1/(np.array(used_star['phot_g_mean_flux_over_error']).reshape(-1,1))*2.5/np.log(10))
+            sigmainv = np.diag(1/base_mag_error**2)
+            X = design_matrix(used_star)
+            Y = np.array(used_star['phot_g_mean_mag']).reshape(-1,1)-base_mag
+            Y = Y.reshape(-1,1)
+            print(X.shape,Y.shape,sigmainv.shape)
+            theta = np.linalg.inv(X.T.dot(sigmainv).dot(X)).dot(X.T).dot(sigmainv).dot(Y)
+            prediction = calculate_prediction(theta,used_star)
+            residual = np.abs((np.squeeze(prediction)-np.squeeze(Y))/base_mag_error)
+            print(theta)
+            return np.squeeze(residual>300),theta
+
+
+
+        sql = "SELECT spi.star_pixel_img_id,spi.source_id,spi.flux_raw,tsp.x_template,tsp.y_template,cm.gdr3_id1,cm.gdr3_dist1,cm.gdr3_is_variable1,cm.gdr3_id2,cm.gdr3_dist2,cm.gdr3_is_variable2 FROM star_pixel_img as spi LEFT JOIN tianyu_source_position as tsp ON tsp.source_id = spi.source_id LEFT JOIN source_crossmatch as cm ON cm.source_id = tsp.source_id WHERE spi.birth_process_id = %s;"
+
+        args = (flux_PID,)
+        raw_flux = self.sql_interface.query(sql,args)
+        # Get the reference star
+        raw_flux['normalized_x'] = (raw_flux['x_template']-np.min(raw_flux['x_template']))/(np.max(raw_flux['x_template'])-np.min(raw_flux['x_template']))*2-1
+        raw_flux['normalized_y'] = (raw_flux['y_template']-np.min(raw_flux['y_template']))/(np.max(raw_flux['y_template'])-np.min(raw_flux['y_template']))*2-1
+
+        first_source_id = raw_flux.loc[0,'source_id']
+        sql = "SELECT * FROM tianyu_source JOIN sky ON sky.sky_id =tianyu_source.sky_id  WHERE source_id = %s;"
+        args = (int(first_source_id),)
+        result = self.sql_interface.query(sql,args)
+        ra = float(result.loc[0,'ra'])
+        dec = float(result.loc[0,'dec'])
+        fov = 0.1+np.sqrt(float(result.loc[0,'fov_x'])**2+float(result.loc[0,'fov_y'])**2)/2
+        Gaia_query_res = self.dl.search_GDR3_by_square(ra = ra,dec = dec, fov = fov,Gmag_limit = 20)
+        Gaia_df = Gaia_query_res.to_pandas()
+        # print(Gaia_df)
+        # print(raw_flux)
+        # merge the Gaia data with the raw flux according to source_id
+        merge_result = pd.merge(raw_flux,Gaia_df,left_on = 'gdr3_id1',right_on = 'SOURCE_ID',how = 'left')
+        
+        # Filter out the utilized stars
+        mask = (merge_result['gdr3_dist1']<4)&(merge_result['gdr3_is_variable1']==False)&(merge_result['flux_raw']>0)&(merge_result['gdr3_dist2']/merge_result['gdr3_dist1']>1.5) & (merge_result['phot_g_mean_mag']<18)& (merge_result['phot_bp_mean_mag']==merge_result['phot_bp_mean_mag'])& (merge_result['phot_rp_mean_mag']==merge_result['phot_rp_mean_mag'])
+        used_star = merge_result[mask]
+        while 1:
+            mask,theta = fit_and_filter(used_star)
+            if np.sum(mask)==0:
+                print(theta)
+                break
+            else:
+                print(f'{np.sum(mask)} outliers detected, refitting')
+            used_star = used_star[~mask]
+        prediction_all = np.squeeze(calculate_prediction(theta,merge_result))-2.5*np.log10(np.squeeze(np.array(merge_result['flux_raw'])))
+        merge_result['mag_calibrated_absolute'] = prediction_all
+        predice_used = np.squeeze(calculate_prediction(theta,used_star))-2.5*np.log10(np.squeeze(np.array(used_star['flux_raw'])))
+        used_star['mag_calibrated_absolute'] = predice_used
+        merge_result['mag_calibrated_absolute_error'] = 1/merge_result['phot_g_mean_flux_over_error']*2.5/np.log(10)
+        upload_result = merge_result.dropna(subset=['mag_calibrated_absolute'])
+        if show:
+            import matplotlib.pyplot as plt
+            print(len(upload_result),len(merge_result),len(used_star))
+            plt.scatter(upload_result['phot_g_mean_mag'],upload_result['mag_calibrated_absolute'],alpha = 0.2,label = 'all calibrated')
+            plt.scatter(used_star['phot_g_mean_mag'],used_star['mag_calibrated_absolute'],alpha = 0.2,label = 'used calibrated')
+            plt.plot([10,20],[10,20],label = 'y=x')
+            plt.xlabel('Gaia G mag')
+            plt.ylabel('calibrated G mag')
+            plt.legend()
+            plt.show()
+
+        return 1
     def select_reference_star(self,PID,template_generation_PID,template_crossmatch_PID,dis_quantile_threshold = 0.5, minimum_marginal_deviation = 200):
         # load database, find best reference star
         sql = "SELECT * FROM sky_image_map WHERE process_id = %s;"

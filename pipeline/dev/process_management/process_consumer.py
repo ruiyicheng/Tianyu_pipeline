@@ -120,6 +120,9 @@ class process_consumer:
             success = self.image_processor.extract_flux(PID,par['PID_img'],par['PID_detect_source'])
         if cmd == "relative_photometry":
             success = self.calibrator.relative_photometric_calibration(PID,par['PID_reference_star'],par['PID_extract_flux'])
+        if cmd == "absolute_photometry":
+            success = self.calibrator.absolute_photometric_calibration_single_frame(PID,par['PID_extract_flux'])
+
         #if cmd == "extract_flux":
         end_time = datetime.datetime.now()
         duration = (end_time - start_time).total_seconds()
