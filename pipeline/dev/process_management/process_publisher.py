@@ -33,6 +33,11 @@ class process_publisher:
 
     #     pid_cal_list = self.calibrate_observation(obs_id,PID_sub,PID_div)
     #     self.generate_template(pid_cal_list,sky_id)
+    def absolute_photometric_calibration_single_frame(self,PID_extract_flux,PID_crossmatch):
+        param_dict = {
+            'PID_extract_flux': PID_extract_flux
+        }
+        return self.publish_CMD(self.default_site_id, self.default_group_id, f'absolute_photometry|{param_dict}', [PID_extract_flux,PID_crossmatch])
     def process_TOO_obs(self,PID_bias,PID_flat,PID_raw,PID_sky): # Generate new sky template with the stacking results
         # calibrate the raw image
         sql = 'SELECT birth_process_id FROM img JOIN observation as obs on obs.obs_id = img.obs_id WHERE obs.process_id = %s and n_stack=1 and (img.image_type_id=1 or img.image_type_id=5 or img.image_type_id = 9 or img.image_type_id = 7);'

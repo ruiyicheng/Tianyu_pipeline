@@ -8,6 +8,8 @@ import pandas as pd
 from Tianyu_pipeline.pipeline.utils import sql_interface 
 import Tianyu_pipeline.pipeline.dev.file_system.file_system  as fs
 from astroquery.gaia import Gaia
+from astropy.table import Table
+import os
 class data_loader:
     def __init__(self):
         self.sql_interface = sql_interface.sql_interface()
@@ -141,7 +143,7 @@ class data_loader:
             mycursor.execute(sql,args)
             self.sql_interface.cnx.commit()
 
-    def search_GDR3_by_square(self,ra=180,dec=0,fov=1,Gmag_limit = 17,method = "online"):
+    def search_GDR3_by_square(self,ra=180,dec=0,fov=1,Gmag_limit = 17,method = "online",cache = True):
         def coord_region(ra,dec,scan_angle,fov):
             deg2rad = np.pi/180
             fov = fov/2*deg2rad #deg
@@ -177,9 +179,13 @@ class data_loader:
             myresult = mycursor.fetchall()
             return myresult
         elif method == "online":
-
+            file_name = f"{self.file_system.path_root}/cache/{ra}_{dec}_{fov}_{Gmag_limit}.csv"
+            # if exists read from file
+            if os.path.exists(file_name):
+                return Table.from_pandas(pd.read_csv(file_name))
+            
             sql = f'''
-            SELECT g3.source_id,g3.ra,g3.dec,g3.phot_g_mean_mag,g3.phot_g_mean_flux_over_error, g3.parallax,g3.pmra,g3.pmdec,gv.in_vari_classification_result from gaiadr3.gaia_source as g3 LEFT JOIN gaiadr3.vari_summary as gv on gv.source_id=g3.source_id 
+            SELECT g3.source_id,g3.ra,g3.dec,g3.phot_g_mean_mag,g3.phot_g_mean_flux_over_error,g3.parallax,g3.pmra,g3.pmdec,gv.in_vari_classification_result,g3.phot_bp_mean_mag,g3.phot_bp_mean_flux_over_error,g3.phot_rp_mean_mag,g3.phot_rp_mean_flux_over_error from gaiadr3.gaia_source as g3 LEFT JOIN gaiadr3.vari_summary as gv on gv.source_id=g3.source_id 
 WHERE g3.phot_g_mean_mag<{Gmag_limit} AND
 CONTAINS(
     POINT('ICRS',g3.ra,g3.dec),
@@ -187,6 +193,8 @@ CONTAINS(
 )=1'''      
             job = Gaia.launch_job_async(sql)
             r = job.get_results()
+            if cache:
+                r.to_pandas().to_csv(file_name,index = False)
             return r
     
     def load_UTC(self,PID):
