@@ -9,9 +9,9 @@ class sql_interface:
         self.host = host
         self.database = database
 
-        self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
-                            host='192.168.1.107',
-                            database='tianyudev')
+        #self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
+                            # host='192.168.1.107',
+                            # database='tianyudev')
     # @property
     # def cnx(self):
     #     return mysql.connector.connect(user='tianyu', password='tianyu',host='192.168.1.107',database='tianyudev')
@@ -47,14 +47,14 @@ class sql_interface:
             self._observer_id = self.get_table_dict("observer")
             return self._observer_id  
              
-    def get_table_dict(self,table,index_key=1,index_value=0):
-        self.cnx = mysql.connector.connect(user=self.user, password=self.password,
-                            host=self.host,
-                            database=self.database)
-        mycursor = self.cnx.cursor()
-        mycursor.execute("SELECT * from "+table+";")
-        myresult = mycursor.fetchall()
-        # print(myresult)
+    def get_table_dict(self,table,index_key=1,index_value=0,db = 'tianyudev'):
+        with mysql.connector.connect(user=self.user, password=self.password,
+                                    host=self.host,
+                                    database = db) as cnx:
+                    with cnx.cursor() as mycursor:
+                        mycursor.execute("SELECT * from "+table+";")
+                        myresult = mycursor.fetchall()
+            # print(myresult)
         res_dict = {}
         for row in myresult:
             res_dict[row[index_key]] = row[index_value]
@@ -99,14 +99,15 @@ class sql_interface:
                     return df
                 return myresult,headers
     def query(self,sql,args,return_df = True,db = 'tianyudev'):
-        self.cnx = mysql.connector.connect(user=self.user, password=self.password,
+        with mysql.connector.connect(user=self.user, password=self.password,
                             host=self.host,
-                            database=db)
-        self.cnx.commit()
-        mycursor = self.cnx.cursor()
-        mycursor.execute(sql,args)
-        myresult = mycursor.fetchall()
-        headers = [i[0] for i in mycursor.description]
+                            database = db) as cnx:
+            with cnx.cursor() as mycursor:
+                # self.cnx.commit()
+                # mycursor = self.cnx.cursor()
+                mycursor.execute(sql,args)
+                myresult = mycursor.fetchall()
+                headers = [i[0] for i in mycursor.description]
         #print(myresult)
         if return_df:
             df = pd.DataFrame(myresult)
@@ -127,3 +128,10 @@ class sql_interface:
         else:
             return result['master_process_id']
 
+class sql_caller:
+    # This is a class with the attribute of a sql_caller object
+    # The process consumer, publisher and manager would inherit this class
+    def __init__(self,user='tianyu', password='tianyu',
+                            host='192.168.1.107',
+                            database='tianyudev'):
+        self.sql_interface = sql_interface(user=user,password=password,host=host,database=database)

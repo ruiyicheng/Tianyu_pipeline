@@ -5,15 +5,18 @@ import glob
 import tqdm
 import numpy as np
 import pandas as pd
+from Tianyu_pipeline.pipeline.middleware.consumer_component import consumer_component
 from Tianyu_pipeline.pipeline.utils import sql_interface 
 import Tianyu_pipeline.pipeline.dev.file_system.file_system  as fs
 from astroquery.gaia import Gaia
 from astropy.table import Table
 import os
-class data_loader:
+
+class data_loader(consumer_component):
     def __init__(self):
-        self.sql_interface = sql_interface.sql_interface()
-        self.file_system = fs.file_system()
+        super().__init__()
+        #self.sql_interface = sql_interface.sql_interface()
+        #self.consumer.fs = fs.file_system()
 
 
     def bind_sky_image(self,PID,is_template = False):
@@ -179,7 +182,7 @@ class data_loader:
             myresult = mycursor.fetchall()
             return myresult
         elif method == "online":
-            file_name = f"{self.file_system.path_root}/cache/{ra}_{dec}_{fov}_{Gmag_limit}.csv"
+            file_name = f"{self.consumer.fs.path_root}/cache/{ra}_{dec}_{fov}_{Gmag_limit}.csv"
             # if exists read from file
             if os.path.exists(file_name):
                 return Table.from_pandas(pd.read_csv(file_name))
@@ -200,7 +203,7 @@ CONTAINS(
     def load_UTC(self,PID):
         picture_birth_PID = self.sql_interface.get_process_dependence(PID)
         for birth_PID in tqdm.tqdm(picture_birth_PID):
-            file_path,file_name = self.file_system.get_dir_for_object('img',{'birth_pid':birth_PID})
+            file_path,file_name = self.consumer.fs.get_dir_for_object('img',{'birth_pid':birth_PID})
             header = fits.getheader(f"{file_path}/{file_name}")
             jd_utc_start = header['JD']
             jd_utc_mid = header['JD']+header['EXPOSURE']/3600/24/2

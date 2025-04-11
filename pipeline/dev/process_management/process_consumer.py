@@ -11,35 +11,67 @@ import logging
 
 from Tianyu_pipeline.pipeline.utils import data_loader as dl
 from Tianyu_pipeline.pipeline.utils import sql_interface
+from Tianyu_pipeline.pipeline.utils.cache_manager import cache_manager
 from Tianyu_pipeline.pipeline.dev.file_system import file_system as fs
 from Tianyu_pipeline.pipeline.utils import data_transfer as dt
 from Tianyu_pipeline.pipeline.image_process import image_processor as image_processor
 from Tianyu_pipeline.pipeline.dev.calibration import calibrator as calibrator
-class process_consumer:
-    def __init__(self,mode = 'test',pika_host = "192.168.1.107",site_id=1,group_id = 1,host_sql = '192.168.1.107',user_sql = 'tianyu', password_sql = 'tianyu'):
+from Tianyu_pipeline.pipeline.utils.Bertin import Bertin_tools
+import Tianyu_pipeline.pipeline.utils.process_site_getter as psg
 
-        self.sql_interface = sql_interface.sql_interface()
-        self.image_processor = image_processor.image_processor()
+class process_consumer(sql_interface.sql_caller):
+    def __init__(self,mode = 'test',pika_host = "192.168.1.107",site_id=1,group_id = 1,host_sql = '192.168.1.107',user_sql = 'tianyu', password_sql = 'tianyu'):
+        # initialize the sql_interface
+        super().__init__(host = host_sql,user = user_sql,password = password_sql)
+        # initialize the cache
+        self.cache = cache_manager()
+        self.cache.connect(self)
+
+        # initialize rabbitmq client
         self.pika_host = pika_host
         self.site_id, self.group_id = site_id,group_id
         self.connection = pika.BlockingConnection(
         pika.ConnectionParameters(host=self.pika_host,heartbeat = 3000,blocked_connection_timeout=10000))
         self.channel = self.connection.channel()
-        self.dl = dl.data_loader()
+
+        # initialize other consumer components, establish the bi-directional reference
+        # process site getter
+        self.psg = psg.process_site_getter()
+        self.psg.connect(self)
+        self.site_info = self.psg.get_channel()
+        # file system
         self.fs = fs.file_system()
-        self.ft = dt.file_transferer()
+        self.fs.connect(self)
+        self.fs.init_file_system()
+        # data loader
+        self.dl = dl.data_loader()
+        self.dl.connect(self)
+
+        # file transferer not used in the latest version
+        # self.ft = dt.file_transferer()
+        # self.ft.connect(self)
+        # Bertin softwares (stateless services)
+        self.Bertin = Bertin_tools()
+        self.Bertin.connect(self)
+        # image processor
+        self.image_processor = image_processor.image_processor()
+        self.image_processor.connect(self)
+
+        # calibrator
         self.calibrator = calibrator.calibrator()
+        self.calibrator.connect(self)
+
         self.channel.queue_declare(queue=f'command_queue_{self.site_id}_{self.group_id}', durable=True)
 
         # Setup logging for performance metrics
         self.logger = logging.getLogger('process_consumer_metrics')
         self.logger.setLevel(logging.INFO)
-        file_handler = logging.FileHandler(f"{os.getpid()}.log")
-        #set the format of the log, the time and the message
-        formatter = logging.Formatter('%(asctime)s,%(message)s')
-        file_handler.setFormatter(formatter)
-        self.logger.addHandler(file_handler)
-        self.logger.info("linux_pid,process_id,command,start_time,end_time,duration_seconds")
+        # file_handler = logging.FileHandler(f"{os.getpid()}.log")
+        # #set the format of the log, the time and the message
+        # formatter = logging.Formatter('%(asctime)s,%(message)s')
+        # file_handler.setFormatter(formatter)
+        # self.logger.addHandler(file_handler)
+        # self.logger.info("linux_pid,process_id,command,start_time,end_time,duration_seconds")
         
         # Record this process's Linux PID
         self.linux_pid = os.getpid()
@@ -87,8 +119,8 @@ class process_consumer:
             success = self.fs.create_dir_for_object(par['obj_type'],par['param_dict'])
         if cmd== 'load_UTC':
             success = self.dl.load_UTC(PID)
-        if cmd== 'transfer_img':
-            success = self.ft.transfer_obs_site_to_site(par['obs_id'],par['site_target'])
+        # if cmd== 'transfer_img': # In the latest version, RPC call of obseration and scp is used to transfer the image
+        #     success = self.ft.transfer_obs_site_to_site(par['obs_id'],par['site_target'])
         if cmd == 'capture':
             pass
         if cmd == 'data_deliver':

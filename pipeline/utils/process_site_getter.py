@@ -1,9 +1,11 @@
-from Tianyu_pipeline.pipeline.utils import sql_interface 
+# from Tianyu_pipeline.pipeline.utils import sql_interface 
+from Tianyu_pipeline.pipeline.middleware.consumer_component import consumer_component
 import socket
 
-class process_site_getter:
+class process_site_getter(consumer_component):
     def __init__(self):
-        self.sql_interface = sql_interface.sql_interface()
+        super().__init__()
+        #self.sql_interface = sql_interface.sql_interface()
     def get_channel(self,channel_id = -1):
         if channel_id == -1:
             #hostname = socket.gethostname()

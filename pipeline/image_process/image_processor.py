@@ -7,24 +7,26 @@ from tqdm import tqdm
 import time
 import sep
 from astropy.stats import sigma_clip 
+from Tianyu_pipeline.pipeline.middleware.consumer_component import consumer_component
 import Tianyu_pipeline.pipeline.utils.sql_interface as sql_interface
 import Tianyu_pipeline.pipeline.utils.data_loader as data_loader
 import Tianyu_pipeline.pipeline.dev.file_system.file_system as fs
 import Tianyu_pipeline.pipeline.dev.process_management.process_publisher as process_pub 
 import Tianyu_pipeline.pipeline.utils.process_site_getter as psg
 
-class image_processor:
-    def __init__(self,site_id=-1,group_id=-1):
-        self.psg = psg.process_site_getter()
-        self.site_info = self.psg.get_channel()
+class image_processor(consumer_component):
+    def __init__(self):#,site_id=-1,group_id=-1):
+        super().__init__()
+        # self.psg = psg.process_site_getter()
+        # self.site_info = self.psg.get_channel()
 
         # if site_id==-1:
         #     site_id = self.site_info['site_id']
         # if group_id==-1:
         #     group_id = site_id
         #self.dl = data_loader.data_loader()
-        self.fs = fs.file_system()
-        self.sql_interface = sql_interface.sql_interface()
+        # self.consumer.fs = fs.file_system()
+        #self.sql_interface = sql_interface.sql_interface()
         #self.pp_this_site = process_pub.process_publisher(site_id = site_id, group_id = group_id)
     def get_dep_img(self,PID,process_type = "birth"):
         res_query = []
@@ -57,7 +59,7 @@ class image_processor:
         
         assert len(img_this) == 1
         img_id_this = int(img_this.loc[0,'image_id'])
-        path_first_file, name_first_file = self.fs.get_dir_for_object("img", {"image_id": img_id_this})
+        path_first_file, name_first_file = self.consumer.fs.get_dir_for_object("img", {"image_id": img_id_this})
         img_path = f"{path_first_file}/{name_first_file}"
         img_data = fits.getdata(img_path)
         max_y_img = img_data.shape[0]
@@ -158,7 +160,7 @@ class image_processor:
         img_this = self.get_dep_img(PID)
         assert len(img_this)==1
         img_id_this = img_this[0]['image_id']
-        path_first_file,name_first_file = self.fs.get_dir_for_object("img",{"image_id":img_id_this})
+        path_first_file,name_first_file = self.consumer.fs.get_dir_for_object("img",{"image_id":img_id_this})
         img_path = f"{path_first_file}/{name_first_file}"
         img_data = fits.getdata(img_path).byteswap().newbyteorder()
         bkg = sep.Background(img_data)
@@ -313,7 +315,7 @@ ORDER BY
             y_stars_template = np.array(result['y_template'])
         else: # not resolved image
             print("Resolving stars in template image using sextractor...")
-            img_folder,img_name = self.fs.get_dir_for_object("img",{"birth_pid":template_img_pid})
+            img_folder,img_name = self.consumer.fs.get_dir_for_object("img",{"birth_pid":template_img_pid})
             img_path = f"{img_folder}/{img_name}"
             img_data = fits.getdata(img_path).byteswap().newbyteorder()
             #img_bkg_rms = fits.getdata(img_path).byteswap().newbyteorder()
@@ -343,7 +345,7 @@ ORDER BY
         #myresult = mycursor.fetchall()
         # res_list = []
         #for target_img_pid in target_img_pid_list:
-        img_folder,img_name = self.fs.get_dir_for_object("img",{"birth_pid":target_img_pid})
+        img_folder,img_name = self.consumer.fs.get_dir_for_object("img",{"birth_pid":target_img_pid})
         img_path = f'{img_folder}/{img_name}'
         img_data = fits.getdata(img_path).byteswap().newbyteorder()
         bkg = sep.Background(img_data)
@@ -402,7 +404,7 @@ ORDER BY
             #print(PID_type)
             res_query = self.get_dep_img(PID,process_type=PID_type)
             #print(res_query)
-            path_first_file,name_first_file = self.fs.get_dir_for_object("img",{"image_id":res_query[0]['image_id']})
+            path_first_file,name_first_file = self.consumer.fs.get_dir_for_object("img",{"image_id":res_query[0]['image_id']})
             header0 = fits.getheader(f"{path_first_file}/{name_first_file}")
             res_dict = np.empty((len(res_query),*(fits.getdata(f"{path_first_file}/{name_first_file}").shape)))#,dtype = np.uint16)
             res_dict[:] = np.nan
@@ -427,7 +429,7 @@ ORDER BY
                 if type(x_to_template)==type(None) or type(y_to_template)==type(None):
                     x_to_template=0
                     y_to_template=0
-                img_folder,img_name = self.fs.get_dir_for_object("img",{"image_id":data_line['image_id']})
+                img_folder,img_name = self.consumer.fs.get_dir_for_object("img",{"image_id":data_line['image_id']})
                 img_path = f"{img_folder}/{img_name}"
                 img_data = fits.getdata(img_path)
                 y_to_template = -y_to_template
@@ -498,8 +500,8 @@ ORDER BY
             #mycursor.execute("SELECT LAST_INSERT_ID();")
             # myresult = mycursor.fetchall()
             # new_img_id = myresult[0][0] #auto_increment
-            path_first_file,name_first_file = self.fs.get_dir_for_object("img",{"image_id":new_img_id})
-            _ = self.fs.create_dir_for_object("img",{"image_id":new_img_id})
+            path_first_file,name_first_file = self.consumer.fs.get_dir_for_object("img",{"image_id":new_img_id})
+            _ = self.consumer.fs.create_dir_for_object("img",{"image_id":new_img_id})
             fits.writeto(f"{path_first_file}/{name_first_file}",res,header = header0,overwrite=True)
             print("recording stacking")
             for i in id_list:
@@ -560,7 +562,7 @@ ORDER BY
         sub_img_id = None
         div_img_id = None
         if sub_img_pid>0:
-            sub_file_path,sub_file_name = self.fs.get_dir_for_object("img",{"birth_pid":sub_img_pid})
+            sub_file_path,sub_file_name = self.consumer.fs.get_dir_for_object("img",{"birth_pid":sub_img_pid})
             sub_img = fits.getdata(f"{sub_file_path}/{sub_file_name}")
             args = (sub_img_pid,)
             result = self.sql_interface.query(sql,args)
@@ -568,7 +570,7 @@ ORDER BY
             sub_img_id = result.to_dict("records")[0]['image_id']
 
         if div_img_pid>0:
-            div_file_path,div_file_name = self.fs.get_dir_for_object("img",{"birth_pid":div_img_pid})
+            div_file_path,div_file_name = self.consumer.fs.get_dir_for_object("img",{"birth_pid":div_img_pid})
             div_img = fits.getdata(f"{div_file_path}/{div_file_name}")         
             args = (div_img_pid,)
             result = self.sql_interface.query(sql,args)
@@ -578,7 +580,7 @@ ORDER BY
 
         # for img_target in img_2_cal:
         #image_id,jd_utc_start,jd_utc_mid,jd_utc_end,bjd_tdb_start_approximation,bjd_tdb_mid_approximation,bjd_tdb_end_approximation,n_stack,processed,image_type_id,flat_image_id,bias_image_id,x_to_template,y_to_template,obs_id_this,img_path_this,deleted_this,hierarchy_this = pic
-        target_image_path,target_image_name = self.fs.get_dir_for_object("img",{"image_id":img_target["image_id"]})
+        target_image_path,target_image_name = self.consumer.fs.get_dir_for_object("img",{"image_id":img_target["image_id"]})
         calibrated_image = fits.getdata(f"{target_image_path}/{target_image_name}")
         calibrated_image_header = fits.getheader(f"{target_image_path}/{target_image_name}")
         new_target_image_name = f"cal_{process_PID}_{target_image_name}"
@@ -616,8 +618,8 @@ ORDER BY
         # mycursor.execute("SELECT LAST_INSERT_ID();")
         # myresult = mycursor.fetchall()
         # new_img_id = myresult[0][0] #auto_increment
-        save_image_path,save_image_name = self.fs.get_dir_for_object("img",{"image_id":new_img_id})
-        success = self.fs.create_dir_for_object("img",{"image_id":new_img_id})
+        save_image_path,save_image_name = self.consumer.fs.get_dir_for_object("img",{"image_id":new_img_id})
+        success = self.consumer.fs.create_dir_for_object("img",{"image_id":new_img_id})
         if subtract_bkg:
             #import sep
             #calibrated_image = calibrated_image.byteswap().newbyteorder()

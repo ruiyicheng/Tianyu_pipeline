@@ -9,26 +9,28 @@ import time
 import sep
 import pandas as pd
 from astropy.stats import sigma_clip 
+from Tianyu_pipeline.pipeline.middleware.consumer_component import consumer_component
 import Tianyu_pipeline.pipeline.utils.sql_interface as sql_interface
-import Tianyu_pipeline.pipeline.utils.data_loader as data_loader
-import Tianyu_pipeline.pipeline.dev.file_system.file_system as fs
-import Tianyu_pipeline.pipeline.dev.process_management.process_publisher as process_pub 
-import Tianyu_pipeline.pipeline.utils.process_site_getter as psg
+#import Tianyu_pipeline.pipeline.utils.data_loader as data_loader
+#import Tianyu_pipeline.pipeline.dev.file_system.file_system as fs
+#import Tianyu_pipeline.pipeline.dev.process_management.process_publisher as process_pub 
+#import Tianyu_pipeline.pipeline.utils.process_site_getter as psg
 import astrometry
 import astropy.wcs
 from sklearn.cluster import KMeans
-class calibrator:
-    def __init__(self,site_id=-1,group_id=-1):
-        self.psg = psg.process_site_getter()
-        self.site_info = self.psg.get_channel()
+class calibrator(consumer_component):
+    def __init__(self):
+        super().__init__()
+        # self.psg = psg.process_site_getter()
+        # self.site_info = self.psg.get_channel()
 
         # if site_id==-1:
         #     site_id = self.site_info['site_id']
         # if group_id==-1:
         #     group_id = site_id
-        self.dl = data_loader.data_loader()
-        self.fs = fs.file_system()
-        self.sql_interface = sql_interface.sql_interface()
+        # self.consumer.dl = data_loader.data_loader()
+        # self.consumer.fs = fs.file_system()
+        # self.sql_interface = sql_interface.sql_interface()
     def astrometric_calibration(self):
         pass
     def find_nearest_kdtree(self,x1, y1, x2, y2):
@@ -128,7 +130,7 @@ ORDER BY
         print(f"{solution.best_match().center_dec_deg=}")
         print(f"{solution.best_match().scale_arcsec_per_pixel=}")
         print('searching gdr3 targets')
-        Gaia_query_res = self.dl.search_GDR3_by_square(ra = solution.best_match().center_ra_deg,dec = solution.best_match().center_dec_deg, fov = 0.1+(sky_result.loc[0,'fov_x']**2+sky_result.loc[0,'fov_y']**2)**0.5/2,Gmag_limit = 20)
+        Gaia_query_res = self.consumer.dl.search_GDR3_by_square(ra = solution.best_match().center_ra_deg,dec = solution.best_match().center_dec_deg, fov = 0.1+(sky_result.loc[0,'fov_x']**2+sky_result.loc[0,'fov_y']**2)**0.5/2,Gmag_limit = 20)
         #print(Gaia_query_res['in_vari_classification_result'])
         is_variable = []
         for i in Gaia_query_res['in_vari_classification_result']:
@@ -257,7 +259,7 @@ ORDER BY
         ra = float(result.loc[0,'ra'])
         dec = float(result.loc[0,'dec'])
         fov = 0.1+np.sqrt(float(result.loc[0,'fov_x'])**2+float(result.loc[0,'fov_y'])**2)/2
-        Gaia_query_res = self.dl.search_GDR3_by_square(ra = ra,dec = dec, fov = fov,Gmag_limit = 20)
+        Gaia_query_res = self.consumer.dl.search_GDR3_by_square(ra = ra,dec = dec, fov = fov,Gmag_limit = 20)
         Gaia_df = Gaia_query_res.to_pandas()
         # print(Gaia_df)
         # print(raw_flux)

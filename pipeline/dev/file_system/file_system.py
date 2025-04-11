@@ -1,18 +1,21 @@
 import os
 import mysql.connector
 from pathlib import Path
+from Tianyu_pipeline.pipeline.middleware.consumer_component import consumer_component
+
 import Tianyu_pipeline.pipeline.utils.process_site_getter as psg
 import Tianyu_pipeline.pipeline.utils.sql_interface as sql_interface
-class file_system:
+class file_system(consumer_component):
     # create a file system if not created
     # detect if a folder exist
     # return the path of a file according to parameters passed
     # provide services that managing file system 
     def __init__(self,host_pika = '192.168.1.107',host_sql = '192.168.1.107'):
-        self.sql_interface = sql_interface.sql_interface()
-        self.psg = psg.process_site_getter()
-        self.site_info = self.psg.get_channel()
-        self.init_file_system()
+        super().__init__()
+        #self.sql_interface = sql_interface.sql_interface()
+        # self.consumer.psg = psg.process_site_getter()
+        # self.consumer.site_info = self.psg.get_channel()
+        # self.init_file_system()
     def init_file_system(self):
         path_root = self.path_root
         Path(path_root+"/image").mkdir( parents=True, exist_ok=True)
@@ -26,7 +29,7 @@ class file_system:
         if hasattr(self,"_path_root"):
             return self._path_root
         else: #Obtain the path from database
-            self._path_root = self.site_info['file_path']
+            self._path_root = self.consumer.site_info['file_path']
             return self._path_root
             
     
@@ -38,7 +41,7 @@ class file_system:
         if site_id == -1:
             path_root = self.path_root
         else:
-            path_root = self.psg.get_channel(channel_id = site_id)['file_path']
+            path_root = self.consumer.psg.get_channel(channel_id = site_id)['file_path']
         if obj_type=='observation':
             if 'full_observation_info' in param_dict:
                 result_dict = param_dict
