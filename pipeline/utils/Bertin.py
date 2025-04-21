@@ -25,7 +25,9 @@ class Bertin_tools(consumer_component):
     def search_GDR3_by_circle(self,ra=180,dec=0,fov=1,Gmag_limit = 17,cache = True): # stateless version of the dl function. implement here to enable independent usage
         file_name = f"{self.cache_dir}/{ra}_{dec}_{fov}_{Gmag_limit}.csv"
         # if exists read from file
+        print('Searching for',file_name)
         if os.path.exists(file_name):
+            print('Found',file_name)
             return Table.from_pandas(pd.read_csv(file_name))
         
         sql = f'''
@@ -444,8 +446,8 @@ sip_order = 0,tune_up_logodds_threshold = None
             header_out['CD2_1'] = cd2_1_rotated
             header_out['CD2_2'] = cd2_2_rotated
 
-            header_out['NAXIS1'] = int(np.cos(np.radians(rot_deg))*header_origin['NAXIS1']+np.sin(np.radians(rot_deg))*header_origin['NAXIS2'])+1
-            header_out['NAXIS2'] = int(np.sin(np.radians(rot_deg))*header_origin['NAXIS1']+np.cos(np.radians(rot_deg))*header_origin['NAXIS2'])+1
+            header_out['NAXIS1'] = int(np.abs(np.cos(np.radians(rot_deg))*header_origin['NAXIS1'])+np.abs(np.sin(np.radians(rot_deg))*header_origin['NAXIS2']))+1
+            header_out['NAXIS2'] = int(np.abs(np.sin(np.radians(rot_deg))*header_origin['NAXIS1'])+np.abs(np.cos(np.radians(rot_deg))*header_origin['NAXIS2']))+1
 
             # Update the CRPIX values
             coord = wcs_out.all_pix2world([[header_origin['NAXIS1']//2,header_origin['NAXIS2']//2]],0)
@@ -456,6 +458,7 @@ sip_order = 0,tune_up_logodds_threshold = None
             # Update the CRVAL values
             header_out['CRVAL1'] = ra
             header_out['CRVAL2'] = dec
+            print(header_out)
         header_out.tofile(target_prefix+".head",overwrite=True)
 
         output_image_file_path, output_weight_file_path = self.SWARP("@"+temp_input_file_list_path,param_dict,target_prefix)
