@@ -10,12 +10,14 @@ class file_system(consumer_component):
     # detect if a folder exist
     # return the path of a file according to parameters passed
     # provide services that managing file system 
-    def __init__(self,host_pika = '192.168.1.107',host_sql = '192.168.1.107'):
+    def __init__(self,host_pika = '192.168.1.107',host_sql = '192.168.1.107',_path_root = None):
         super().__init__()
         #self.sql_interface = sql_interface.sql_interface()
         # self.consumer.psg = psg.process_site_getter()
         # self.consumer.site_info = self.psg.get_channel()
         # self.init_file_system()
+        if not _path_root is  None:
+            self._path_root = _path_root
     def init_file_system(self):
         path_root = self.path_root
         Path(path_root+"/image").mkdir( parents=True, exist_ok=True)

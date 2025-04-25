@@ -3,9 +3,9 @@ from Tianyu_pipeline.pipeline.dev.file_system import file_system
 import socket
 
 class deleter:
-    def __init__(self):
+    def __init__(self,root_path = None):
         self.sql_interface = sql_interface.sql_interface()
-        self.fs = file_system.file_system()
+        self.fs = file_system.file_system(_path_root = root_path)
     def get_channel(self,channel_id = -1):
         if channel_id == -1:
             #hostname = socket.gethostname()

@@ -2,7 +2,7 @@ from Tianyu_pipeline.pipeline.utils import delete_undocumented_img
 from Tianyu_pipeline.pipeline.utils import sql_interface
 import pandas as pd
 import tqdm
-def rollback(obs_id,bias_id = 7,flat_id = 6,Flatbias = True):
+def rollback(obs_id,bias_id = 7,flat_id = 6,Flatbias = True,root_path = "/media/test/nf/mgo_data"):
     #obs_id used to remove reference_star
     si = sql_interface.sql_interface()
     #obtain sky_id
@@ -138,7 +138,7 @@ def rollback(obs_id,bias_id = 7,flat_id = 6,Flatbias = True):
     args = image_to_remove
     si.executemany(sql,args)
 
-    delete_undocumented_img.deleter().files()
+    delete_undocumented_img.deleter(root_path).files()
 
 
 

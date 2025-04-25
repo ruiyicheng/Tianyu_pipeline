@@ -18,7 +18,29 @@ class data_loader(consumer_component):
         #self.sql_interface = sql_interface.sql_interface()
         #self.consumer.fs = fs.file_system()
 
-
+    def get_img_instrument_param(self,img_id = None, obs_id = None):
+        # input: image id or observation id
+        # output: a dict of the image parameters, including instrument focal length, pixel size, filter name, etc.
+        if obs_id is None:
+            if not img_id is None:
+                # get the observation id from image id
+                sql = 'SELECT * FROM img WHERE image_id = %s;'
+                args = (img_id,)
+                result = self.sql_interface.query(sql,args)
+                if len(result)!=1:
+                    raise ValueError("Image id not found")
+                img_info_dict = result.to_dict('records')[0]
+                obs_id = int(img_info_dict['obs_id'])
+            else: 
+                raise ValueError("Please provide either img_id or obs_id")
+        # get the image parameters from observation id
+        sql = 'SELECT * FROM observation LEFT JOIN instrument ON observation.instrument_id = instrument.instrument_id LEFT JOIN filters ON filters.filter_id = observation.instrument_id WHERE obs_id = %s;'
+        args = (obs_id,)
+        result = self.sql_interface.query(sql,args)
+        if len(result)!=1:
+            raise ValueError("Observation id not found")
+        obs_info_dict = result.to_dict('records')[0]
+        return obs_info_dict
     def bind_sky_image(self,PID,is_template = False):
         sky_img_PIDs = self.sql_interface.get_process_dependence(PID)
         for pids in sky_img_PIDs:
