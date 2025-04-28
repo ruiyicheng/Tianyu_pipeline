@@ -8,6 +8,11 @@ import time
 import sep
 from astropy.stats import sigma_clip 
 from astropy.wcs import WCS
+import cv2
+import numpy.ma as ma
+from skimage.morphology import binary_dilation, disk
+from ccdproc import cosmicray_lacosmic
+
 from Tianyu_pipeline.pipeline.middleware.consumer_component import consumer_component
 import Tianyu_pipeline.pipeline.utils.sql_interface as sql_interface
 import Tianyu_pipeline.pipeline.utils.data_loader as data_loader
@@ -359,10 +364,6 @@ ORDER BY
             if False:#Used for debug, show the sep resolve results
                 self.show_source_img(img_data,objects)
 
-
-            
-            #print(objects)
-            #print(len(objects['x']))
             if len(objects['x'])<3:
                 print('Too few star resolved in template image')
                 return 0
@@ -413,17 +414,9 @@ ORDER BY
             self.sql_interface.execute(sql,arg)
             return 1
 
-
-
-        
-        #res_list.append([res[2],xshift,yshift,np.sum((lambda1/lambda2)<good_star_threshold)/len(lambda1),len(lambda2)])
         print("Alignment result:",xshift,yshift)
-        #if not test:
         arg = (xshift,yshift,PID,template_img_id,n_star_this,target_img_pid)
-        #mycursor = self.sql_interface.cnx.cursor()
         sql = "UPDATE img SET img.x_to_template = %s, img.y_to_template = %s, img.align_process_id = %s, img.align_target_image_id = %s, img.n_star_resolved = %s where img.birth_process_id = %s;"
-        #mycursor.execute(sql,arg)
-        #self.sql_interface.cnx.commit()
         self.sql_interface.execute(sql,arg)
         return 1
     #method = mean, median, flat_stacking (3median-2mean)
@@ -581,6 +574,8 @@ ORDER BY
         
         
     def calibration(self,process_PID,site_id,cal_img_pid, sub_img_pid = -1, div_img_pid = -1,subtract_bkg = False,debug = True):#,obs_id=1,hierarchy=2,img_type = "flat_raw",consider_flat = True,consider_bias = True,bias_id = 2,bias_hierarchy = 2,flat_id = 1,flat_hierarchy = 2,keep_origin = True,outpath="samedir",debug = False):
+        # Calibration of the image (debias/flat calibration or both)
+        # Mask the bad pixels
 
         sql = "SELECT * FROM img WHERE birth_process_id=%s;"
         args = (cal_img_pid,)
@@ -649,21 +644,20 @@ ORDER BY
         # myresult = mycursor.fetchall()
         # new_img_id = myresult[0][0] #auto_increment
         save_image_path,save_image_name = self.consumer.fs.get_dir_for_object("img",{"image_id":new_img_id})
+        full_img_path = f"{save_image_path}/{save_image_name}"
         success = self.consumer.fs.create_dir_for_object("img",{"image_id":new_img_id})
         if sub_img_pid > 0 and div_img_pid > 0:
-            # record the background info
-            # mask the unwanted pixels
-
-            pass
-        if subtract_bkg:
-            #import sep
-            #calibrated_image = calibrated_image.byteswap().newbyteorder()
+            # full calibration for sky fields
             bkg = sep.Background(calibrated_image_ret.astype("float32"))
-            calibrated_image_ret = calibrated_image_ret-bkg
+            calibrated_image_debkg = calibrated_image_ret-bkg
+            if subtract_bkg:
+                calibrated_image_ret = calibrated_image_ret-bkg
+            star_resolve = sep.extract(calibrated_image_debkg.astype("float32"),5,err=bkg.globalrms,minarea=5)
+            n_stars = len(star_resolve)
             bkg_rms = bkg.globalrms
             # 将背景噪声 RMS 值记录到数据库中
-            sql = "UPDATE img SET bkg_rms = %s WHERE image_id = %s"
-            args = (float(bkg_rms), new_img_id)
+            sql = "UPDATE img SET bkg_rms = %s,n_star_resolved = %s  WHERE image_id = %s"
+            args = (float(bkg_rms), int(n_stars),new_img_id)
             mycursor = self.sql_interface.cnx.cursor()
             mycursor.execute(sql, args)
             self.sql_interface.cnx.commit()
@@ -671,14 +665,103 @@ ORDER BY
             #fits.writeto(f"{save_image_path}/{save_image_name.strip('.fits').strip('.fit')+"_bkgrms.fits"}",bkg_rms.astype('float32'),header = calibrated_image_header,overwrite=True)
 
         
-        fits.writeto(f"{save_image_path}/{save_image_name}",calibrated_image_ret.astype('float32'),header = calibrated_image_header,overwrite=True)
+        fits.writeto(full_img_path,calibrated_image_ret.astype('float32'),header = calibrated_image_header,overwrite=True)
 
         return success
+    def get_mask(self,image,Nbit = 16,sat_level = 0.9,gain = 1.3,readnoise = 1,dilation_radius = 5,show = False):
+        # Get the masks for saturated pixels, Cosmic ray, hot pixels and airplane/satellite tracks
+        # saturate
+        mask_saturate = image > (2 ** Nbit * sat_level)
+        cr_params = {
+            'sigclip': 4.5,
+            'objlim': 5.0,
+            'gain': gain,      # e-/ADU - CHECK YOUR HEADER!
+            'readnoise': readnoise, # e- - CHECK YOUR HEADER!
+            'satlevel': 2 ** Nbit * sat_level # ADU - CHECK YOUR HEADER!
+        }
+        image_this = image.astype('float32')
+
+        mask_hot_pixel = self.mask_cosmic_rays(image_this, **cr_params)
+
+        bkg = sep.Background(image_this,mask = mask_hot_pixel | mask_saturate)
+        bkg_image = bkg.back()
+        bkg_rms = bkg.rms()
+        image_sub = image - bkg_image
+        mask_criteria = image_sub>1.5*bkg_rms
+        mask_criteria = (mask_criteria*255).astype('uint8')
+        kernel = np.ones((3,3),np.uint8)
+        mask_criteria = cv2.erode(mask_criteria,kernel)
+        kernel = np.ones((3,3),np.uint8)
+        mask_criteria = cv2.dilate(mask_criteria,kernel)
+        contours,hierarchy = cv2.findContours(mask_criteria,cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
+
+
+        
+        airplane_contour = []
+        for cnt in contours:
+        
+            rect = cv2.minAreaRect(cnt)
+            long_axis = np.maximum(rect[1][0],rect[1][1])
+            short_axis = np.minimum(rect[1][0],rect[1][1])
+
+            #Used the criteria in LAHER 14 
+            if long_axis>800 or long_axis>300 and short_axis<20 or long_axis>150 and short_axis<4:
+                airplane_contour.append(cnt)
+
+        print(f"find {len(airplane_contour)} airplanes")
+        mask_track = np.zeros(mask_criteria.shape,dtype='uint8')
+        mask_track = cv2.drawContours(mask_track,airplane_contour, -1, 255,thickness=cv2.FILLED)
+
+        mask_track = mask_track>1
+        struct = disk(dilation_radius) # Or square(2*dilation_radius + 1)
+        mask_track = binary_dilation(mask_track, footprint=struct)
+
+
+
+        # compute the mask
+        mask = mask_saturate | mask_hot_pixel | mask_track
+        print(f'masked {np.sum(mask)} pixels')
+
+        return mask
+    def mask_cosmic_rays(self,data, sigclip=4.5, objlim=5.0, gain=1.0, readnoise=5.0, satlevel=60000.0, verbose=False):
+        """
+        Creates a mask for cosmic rays using the L.A.Cosmic algorithm.
+
+        Args:
+            data (np.ndarray): Input image data.
+            sigclip (float): Sigma threshold for cosmic ray detection.
+            objlim (float): Contrast limit between cosmic ray and underlying object.
+            gain (float): Detector gain (e.g., e-/ADU). Get from header if possible.
+            readnoise (float): Detector read noise (e.g., e-). Get from header if possible.
+            satlevel (float): Saturation level (ADU). Get from header if possible.
+            verbose (bool): Print progress information.
+
+        Returns:
+            np.ndarray: Boolean mask where True indicates a cosmic ray pixel.
+        """
+        print("Masking cosmic rays...")
+        # L.A.Cosmic implementation in ccdproc
+        # It returns the cleaned image and the mask
+        # We need gain_apply=False if gain is in e-/ADU and data is in ADU
+        cleaned_data, cr_mask = cosmicray_lacosmic(
+            data,
+            sigclip=sigclip,
+            objlim=objlim,
+            gain=gain,
+            readnoise=readnoise,
+            satlevel=satlevel,
+            gain_apply=False, # Assume gain/readnoise are in e-, data in ADU
+            verbose=verbose
+        )
+        print(f"Found {np.sum(cr_mask)} cosmic ray pixels.")
+        # cr_mask is True where CRs were detected
+        return cr_mask
 if __name__=="__main__":
-    clb = calibrator()
-    #print(clb.stacking('/home/yichengrui/workspace/TianYu/pipeline/image_process/out/caliborate/superbias_mgo.fit',2,method = "median"))
-    #clb.stacking('/home/yichengrui/workspace/TianYu/pipeline/image_process/out/caliborate/superflat_mgo_uncorred.fit',1,method = "median",img_type="flat_raw")
-    #clb.calibration(obs_id=1,hierarchy=2,consider_flat = False,img_type = "flat_raw",bias_id = 2,bias_hierarchy = 2,debug = False)
-    #clb.calibration(obs_id=3,hierarchy=1,consider_flat = True,img_type = "science_raw",bias_id = 2,bias_hierarchy = 2,debug = False)
-    clb.calibration(obs_id=8,hierarchy=1,consider_flat = True,img_type = "deep_raw",bias_id = 2,bias_hierarchy = 2,debug = False)
-    clb.stacking('/home/yichengrui/workspace/TianYu/pipeline/image_process/out/reduced_res/stack_img/M81_l.fit',obs_id = 8,method = "mean",img_type="deep_processed")
+    # clb = calibrator()
+    # #print(clb.stacking('/home/yichengrui/workspace/TianYu/pipeline/image_process/out/caliborate/superbias_mgo.fit',2,method = "median"))
+    # #clb.stacking('/home/yichengrui/workspace/TianYu/pipeline/image_process/out/caliborate/superflat_mgo_uncorred.fit',1,method = "median",img_type="flat_raw")
+    # #clb.calibration(obs_id=1,hierarchy=2,consider_flat = False,img_type = "flat_raw",bias_id = 2,bias_hierarchy = 2,debug = False)
+    # #clb.calibration(obs_id=3,hierarchy=1,consider_flat = True,img_type = "science_raw",bias_id = 2,bias_hierarchy = 2,debug = False)
+    # clb.calibration(obs_id=8,hierarchy=1,consider_flat = True,img_type = "deep_raw",bias_id = 2,bias_hierarchy = 2,debug = False)
+    # clb.stacking('/home/yichengrui/workspace/TianYu/pipeline/image_process/out/reduced_res/stack_img/M81_l.fit',obs_id = 8,method = "mean",img_type="deep_processed")
+    pass
