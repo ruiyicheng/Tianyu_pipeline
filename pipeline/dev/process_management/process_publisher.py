@@ -38,7 +38,29 @@ class process_publisher:
             'PID_extract_flux': PID_extract_flux
         }
         return self.publish_CMD(self.default_site_id, self.default_group_id, f'absolute_photometry|{param_dict}', [PID_extract_flux,PID_crossmatch])
-    def process_TOO_obs(self,PID_bias,PID_flat,PID_raw,PID_sky): # Generate new sky template with the stacking results
+    def process_TOO_obs_Bertin(self,PID_bias,PID_flat,PID_raw,PID_sky):
+        # calibrate the raw image
+        sql = 'SELECT birth_process_id FROM img JOIN observation as obs on obs.obs_id = img.obs_id WHERE obs.process_id = %s and n_stack=1 and (img.image_type_id=1 or img.image_type_id=5 or img.image_type_id = 9 or img.image_type_id = 7);'
+        args = (PID_bias,)
+        PID_biases = self.sql_interface.query(sql,args)
+        args = (PID_flat,)
+        PID_flats = self.sql_interface.query(sql,args)
+        args = (PID_raw,)
+        sql = "SELECT obs_id from observation where observation.process_id = %s;"
+        obs_id_raw = self.sql_interface.query(sql,args)
+        PID_super_bias = self.stacking(list(PID_biases['birth_process_id']))
+        sql = 'select sky_id from sky where process_id = %s;'
+        args = (PID_sky,)
+        sky_id = int(self.sql_interface.query(sql,args).loc[0,'sky_id'])
+        PID_flat_debiased_list = []
+        for pf in list(PID_flats['birth_process_id']):
+            flat_debiased_pid = self.calibrate({'PID_cal':int(pf),'PID_sub':PID_super_bias,'subtract_bkg':0})
+            PID_flat_debiased_list.append(flat_debiased_pid)
+        PID_super_flat = self.stacking(PID_flat_debiased_list,method = 'flat_stacking',num_image_limit=50)
+        # In this version, star number, sky WCS and bkgerr are recorede while calibration
+        PID_calibrated_img = self.calibrate_observation(int(obs_id_raw.loc[0,'obs_id']),PID_super_bias,PID_super_flat)
+
+    def process_TOO_obs_030(self,PID_bias,PID_flat,PID_raw,PID_sky): # Generate new sky template with the stacking results
         # calibrate the raw image
         sql = 'SELECT birth_process_id FROM img JOIN observation as obs on obs.obs_id = img.obs_id WHERE obs.process_id = %s and n_stack=1 and (img.image_type_id=1 or img.image_type_id=5 or img.image_type_id = 9 or img.image_type_id = 7);'
         args = (PID_bias,)
@@ -175,7 +197,7 @@ class process_publisher:
         pid_frame_list = list(result['birth_process_id'])
         pid_cal_list = []
         for PID_frame in pid_frame_list:
-            pid_cal_list.append(self.calibrate({'PID_cal':int(PID_frame),'PID_sub':PID_sub,'PID_div':PID_div}))
+            pid_cal_list.append(self.calibrate({'PID_cal':int(PID_frame),'PID_sub':PID_sub,'PID_div':PID_div,'obs_id':int(obs_id)}))
         return pid_cal_list
 
 

@@ -134,7 +134,9 @@ class process_consumer(sql_interface.sql_caller):
                 par['PID_div'] = -1
             if not "subtract_bkg" in par:
                 par['subtract_bkg'] = 1
-            success = self.image_processor.calibration(PID,self.site_id,par['PID_cal'], sub_img_pid = par['PID_sub'], div_img_pid = par['PID_div'],subtract_bkg = par['subtract_bkg'])
+            if not "obs_id" in par:
+                par['obs_id'] = -1
+            success = self.image_processor.calibration(PID,self.site_id,par['PID_cal'], sub_img_pid = par['PID_sub'], div_img_pid = par['PID_div'],subtract_bkg = par['subtract_bkg'],obs_id = par['obs_id'])
         if cmd == 'select_good_img':
             success = self.image_processor.select_good_img(PID)
 

@@ -573,7 +573,7 @@ ORDER BY
         return 1
         
         
-    def calibration(self,process_PID,site_id,cal_img_pid, sub_img_pid = -1, div_img_pid = -1,subtract_bkg = False,debug = True):#,obs_id=1,hierarchy=2,img_type = "flat_raw",consider_flat = True,consider_bias = True,bias_id = 2,bias_hierarchy = 2,flat_id = 1,flat_hierarchy = 2,keep_origin = True,outpath="samedir",debug = False):
+    def calibration(self,process_PID,site_id,cal_img_pid, sub_img_pid = -1, div_img_pid = -1,subtract_bkg = False,obs_id = -1,debug = True):#,obs_id=1,hierarchy=2,img_type = "flat_raw",consider_flat = True,consider_bias = True,bias_id = 2,bias_hierarchy = 2,flat_id = 1,flat_hierarchy = 2,keep_origin = True,outpath="samedir",debug = False):
         # Calibration of the image (debias/flat calibration or both)
         # Mask the bad pixels
 
