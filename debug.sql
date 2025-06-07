@@ -5,6 +5,8 @@
 #pp_this.register_info({"cmd":"INSERT INTO observation (observation_type_id,target_id,batch_size,instrument_id,obs_site_id,observer_id,bin_size) values (%s,%s,%s,%s,%s,%s,%s)","args":"[1,8,5,1,1,2,1]"})
 #pp_this.register_info({"cmd":"INSERT INTO observation (observation_type_id,target_id,batch_size,instrument_id,obs_site_id,observer_id,bin_size) values (%s,%s,%s,%s,%s,%s,%s)","args":"[1,9,5,1,1,2,1]"})
 #pp_this.register_info({"cmd":"INSERT INTO sky (target_id,ra,`dec`,fov_x,fov_y) values (%s,%s,%s,%s,%s)","args":"[8,305.2218674394,59.44877091036,0.76,0.5]"})
+#pp_this.register_info({"cmd":"INSERT INTO sky (target_id,ra,`dec`,fov_x,fov_y) values (%s,%s,%s,%s,%s)","args":"[11,300.10235098578516,45.762192901161136,0.52,0.52]"})
+#pp_this.register_info({"cmd":"INSERT INTO sky (target_id,ra,`dec`,fov_x,fov_y) values (%s,%s,%s,%s,%s)","args":"[12,284.8304423333972,44.65809133098329,0.52,0.52]"})
 USE tianyudev;
 SELECT * FROM target_n;
 use tianyudev;
@@ -30,8 +32,8 @@ SELECT * FROM image_type;
 #DELETE FROM observation where instrument_id=1;
 SELECT * FROM process_list where not process_status_id=5 ORDER BY process_id;
 SELECT * FROM process_dependence;
-DELETE FROM process_dependence where master_process_id>=172567522748834927793656 or dependence_process_id>=172567522748834927793656;
-DELETE FROM process_list where process_id>=172567522748834927793656;
+DELETE FROM process_dependence where master_process_id>=173323862066580896704759 or dependence_process_id>=173323862066580896704759;
+DELETE FROM process_list where process_id>=173323862066580896704759;
 DELETE FROM process_list where process_id=172567522748834927793656;
 
 UPDATE process_list SET process_status_id = 1 where process_id=172536517560333557525176;

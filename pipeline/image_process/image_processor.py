@@ -12,7 +12,7 @@ import cv2
 import numpy.ma as ma
 from skimage.morphology import binary_dilation, disk
 from ccdproc import cosmicray_lacosmic
-
+import subprocess
 from Tianyu_pipeline.pipeline.middleware.consumer_component import consumer_component
 import Tianyu_pipeline.pipeline.utils.sql_interface as sql_interface
 import Tianyu_pipeline.pipeline.utils.data_loader as data_loader
@@ -51,7 +51,7 @@ class image_processor(consumer_component):
                 res_query.extend(result.to_dict("records"))
         return res_query
 
-    def get_image_WCS(self,image_id,sky_PID = None,ra = None, dec = None):
+    def get_image_WCS(self,image_id,target_id = None,ra = None, dec = None):
         # if there is WCS in the header, use it
         # if not, get the WCS from the database
         
@@ -60,20 +60,19 @@ class image_processor(consumer_component):
         image_path = self.consumer.fs.get_dir_for_object("img",{"image_id":image_id})
         img_path = f"{image_path[0]}/{image_path[1]}"
         header = fits.getheader(img_path)
-        try:
-            wcs = WCS(header)
+        if "CTYPE1" in header and "CTYPE2" in header:
             has_wcs = True
-        except:
+        else:
             has_wcs = False
         if has_wcs:
-            return wcs
+            return WCS(header)
         else:
-            if (sky_PID is None) and ((ra is None) or (dec is None)):
+            if (target_id is None) and ((ra is None) or (dec is None)):
                 raise ValueError("Please provide sky_PID or ra and dec")
-            if sky_PID is not None:
+            if target_id is not None:
                 # get ra, dec from database
-                sql = "SELECT ra, `dec` FROM sky WHERE process_id = %s;"
-                args = (sky_PID,)
+                sql = "SELECT ra, `dec` FROM sky WHERE target_id = %s;"
+                args = (target_id,)
                 result = self.sql_interface.query(sql,args)
                 if len(result) == 0:
                     raise ValueError("No sky PID found")
@@ -82,7 +81,7 @@ class image_processor(consumer_component):
             # Use Bertin tools to get WCS
             param = self.consumer.dl.get_img_instrument_param(img_id = image_id)
             arcsec_per_pixel = float((param['x_scale_mum']+param['y_scale_mum'])/2/1000/param['focal_length_mm']*206265)
-            header_scamp = self.consumer.Bertin.SCAMP_image(self,img_path,{"DETECT_MINAREA":5,"DETECT_THRESH":5},ra_deg = ra,dec_deg = dec, arcsec_per_pixel = arcsec_per_pixel)
+            header_scamp = self.consumer.Bertin.SCAMP_image(img_path,{"DETECT_MINAREA":5,"DETECT_THRESH":5},ra_deg = ra,dec_deg = dec, arcsec_per_pixel = arcsec_per_pixel)
             return WCS(header_scamp)
 
 
@@ -434,18 +433,90 @@ ORDER BY
             #print(res_query)
             path_first_file,name_first_file = self.consumer.fs.get_dir_for_object("img",{"image_id":res_query[0]['image_id']})
             header0 = fits.getheader(f"{path_first_file}/{name_first_file}")
+            inst_info = self.consumer.dl.get_img_instrument_param(img_id = res_query[0]['image_id'])
+            id_list = []
+            jd_start_list = []
+            jd_mid_list = []
+            jd_end_list = []
+            n_stack_list = []
             if method == "SWARP":
-                pass
+                sky_bkg_list = []
+                nstar_list = []
+                image_path_list = []
+                mask_image_path_list = []
+                n_stack_list = []
+                for i,data_line in tqdm(enumerate(res_query)):
+                    if int(data_line["n_star_resolved"])==0:
+                        print("No star resolved in this image")
+                        continue
+                    id_list.append(int(data_line['image_id']))
+                    jd_start_list.append(float(data_line["jd_utc_start"]))
+                    jd_mid_list.append(float(data_line["jd_utc_mid"]))
+                    jd_end_list.append(float(data_line["jd_utc_end"]))
+                    sky_bkg_list.append(float(data_line["bkg_rms"]))
+                    n_stack_list.append(float(data_line["n_stack"]))
+                    nstar_list.append(int(data_line["n_star_resolved"]))
+                    # to ensure the image have WCS. otherwise, exit
+                    #self.get_image_WCS(int(data_line['image_id']),target_id = int(inst_info['target_id']))
+                    path_first_file,name_first_file = self.consumer.fs.get_dir_for_object("img",{"image_id":int(data_line['image_id'])})
+                    image_path = f"{path_first_file}/{name_first_file}"
+                    mask_image_id = int(data_line['mask_image_id'])
+                    path_first_file_mask,name_first_file_mask = self.consumer.fs.get_dir_for_object("img",{"image_id":mask_image_id})
+                    mask_path = f"{path_first_file_mask}/{name_first_file_mask}"
+                    image_path_list.append(image_path)
+                    mask_image_path_list.append(mask_path)
+                # filter the image
+                mask_star = sigma_clip(np.array(nstar_list),sigma=3).mask
+                # Eliminate the images with aeroplane or other issues
+                mask_bkg = sigma_clip(np.array(sky_bkg_list),sigma_lower = 100,sigma_upper = 5).mask
+                mask_result = ~(mask_star | mask_bkg)
+                jd_start_list = np.array(jd_start_list)[mask_result]
+                jd_mid_list = np.array(jd_mid_list)[mask_result]
+                jd_end_list = np.array(jd_end_list)[mask_result]
+                image_path_list = np.array(image_path_list)[mask_result]
+                mask_image_path_list = np.array(mask_image_path_list)[mask_result]
+                id_list = np.array(id_list)[mask_result]
+                n_stack_list = np.array(n_stack_list)[mask_result]
+                img_type_id = res_query[0]['image_type_id']
+                new_name = f"n_{int(np.sum(n_stack_list))}_PID_{PID}_from_{name_first_file.split('from_')[-1]}"#.strip('.fits').strip('.fit')
+                mask_name = "mask_" + new_name
+                # Insert mask
+                args = (np.min(jd_start_list),np.mean(jd_mid_list),np.max(jd_end_list),int(np.sum(n_stack_list)),1,img_type_id,res_query[0]['flat_image_id'],res_query[0]['dark_image_id'],0,0,res_query[0]['obs_id'],mask_name,0,res_query[0]['batch'],site_id)
+                npar = ("%s,"*len(args))[:-1]
+                sql = f"INSERT INTO img (jd_utc_start,jd_utc_mid,jd_utc_end,n_stack,processed,image_type_id,flat_image_id,dark_image_id,x_to_template,y_to_template,obs_id,img_name,deleted,batch,store_site_id) VALUES ({npar})"
+                mask_image_id = self.sql_interface.execute(sql,args,return_last_id=True)
+                args = (np.min(jd_start_list),np.mean(jd_mid_list),np.max(jd_end_list),int(np.sum(n_stack_list)),1,img_type_id,res_query[0]['flat_image_id'],res_query[0]['dark_image_id'],0,0,res_query[0]['obs_id'],new_name,0,res_query[0]['batch'],site_id,PID,int(mask_image_id))
+                npar = ("%s,"*len(args))[:-1]
+                sql = f"INSERT INTO img (jd_utc_start,jd_utc_mid,jd_utc_end,n_stack,processed,image_type_id,flat_image_id,dark_image_id,x_to_template,y_to_template,obs_id,img_name,deleted,batch,store_site_id,birth_process_id,mask_image_id) VALUES ({npar})"
+                new_img_id = self.sql_interface.execute(sql,args,return_last_id=True)
+                new_image_folder,new_image_path = self.consumer.fs.get_dir_for_object("img",{"image_id":new_img_id})
+
+                new_image_path = f"{new_image_folder}/{new_name}"
+                mask_folder,mask_image_path = self.consumer.fs.get_dir_for_object("img",{"image_id":mask_image_id})
+                success = self.consumer.fs.create_dir_for_object("img",{"image_id":new_img_id})
+                mask_image_path = f"{mask_folder}/{mask_name}"
+                output_image_file_path, output_weight_file_path = self.consumer.Bertin.SWARP_stack(image_path_list,{},mask_image_path_list)
+                success = self.consumer.fs.create_dir_for_object("img",{"image_id":mask_image_id})
+
+                # move output files
+                subprocess.run(f'mv {output_image_file_path} {new_image_path}', shell=True)
+                subprocess.run(f'mv {output_weight_file_path} {mask_image_path}', shell=True)
+
+
+
+                
+
+
+
+
+
+
             else:
                 res_dict = np.empty((len(res_query),*(fits.getdata(f"{path_first_file}/{name_first_file}").shape)))#,dtype = np.uint16)
                 res_dict[:] = np.nan
                 print('importing data...')
 
-                id_list = []
-                jd_start_list = []
-                jd_mid_list = []
-                jd_end_list = []
-                n_stack_list = []
+                
                 goodness_list = []
                 for i,data_line in tqdm(enumerate(res_query)):
                     #image_id,jd_utc_start,jd_utc_mid,jd_utc_end,bjd_tdb_start_approximation,bjd_tdb_mid_approximation,bjd_tdb_end_approximation,n_stack,processed,image_type_id,flat_image_id,bias_image_id,x_to_template,y_to_template,obs_id,img_path,deleted_this,hierarchy_this = data_line
@@ -501,12 +572,23 @@ ORDER BY
                 if method == "flat_stacking":
                     print('flat stacking!!!')
                     averages_picture = np.mean(res_dict, axis=(1, 2)).reshape(-1,1,1)
-                    normalized_picture = res_dict/averages_picture
+                    for i in range(len(res_dict)):
+                        res_dict[i] = res_dict[i]/np.mean(res_dict[i])
+                    
+                    #normalized_picture = res_dict/averages_picture
                     
                     weights = averages_picture #1/sigma^2 proportional to flux due to Poisson noise
                     print('weights = ',weights)
-                    mean = nanaverage(normalized_picture,weights,axis = 0)
-                    median = np.nanmedian(normalized_picture,axis = 0)
+                    mean = 0
+                    for i in range(len(weights)):
+                        mean += weights[i]*res_dict[i]
+                    mean = mean/np.sum(weights)
+                    print('taking median')
+                    median = np.zeros_like(mean)
+                    # Do it line-by-line to save memory
+                    for i in tqdm(range(len(median))): 
+                        median[i] = np.median(res_dict[:,i,:],axis = 0)
+                    # np.median(res_dict,axis = 0)
                     res = 3*median-2*mean
                 #print(np.sum(n_stack_list))
                 res = res.astype(np.float32)
@@ -517,23 +599,23 @@ ORDER BY
                 else:
                     img_type_id = res_query[0]['image_type_id']
 
-            if not consider_goodness:
-                args = (np.min(jd_start_list),np.mean(jd_mid_list),np.max(jd_end_list),int(np.sum(n_stack_list)),1,img_type_id,res_query[0]['flat_image_id'],res_query[0]['dark_image_id'],0,0,res_query[0]['obs_id'],new_name,0,res_query[0]['align_target_image_id'],res_query[0]['batch'],site_id,PID)
-                sql = "INSERT INTO img (jd_utc_start,jd_utc_mid,jd_utc_end,n_stack,processed,image_type_id,flat_image_id,dark_image_id,x_to_template,y_to_template,obs_id,img_name,deleted,align_target_image_id,batch,store_site_id,birth_process_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
-            else:
-                args = (np.min(jd_start_list),np.mean(jd_mid_list),np.max(jd_end_list),int(np.sum(n_stack_list)),1,img_type_id,res_query[0]['flat_image_id'],res_query[0]['dark_image_id'],0,0,res_query[0]['obs_id'],new_name,0,res_query[0]['align_target_image_id'],res_query[0]['batch'],site_id,PID,np.sum(goodness_list))
-                sql = "INSERT INTO img (jd_utc_start,jd_utc_mid,jd_utc_end,n_stack,processed,image_type_id,flat_image_id,dark_image_id,x_to_template,y_to_template,obs_id,img_name,deleted,align_target_image_id,batch,store_site_id,birth_process_id,coadd_weight) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
-            #mycursor = self.sql_interface.cnx.cursor()
-            #mycursor.execute(sql,args)
-            #self.sql_interface.cnx.commit()
-            new_img_id = self.sql_interface.execute(sql,args,return_last_id=True)
-            #mycursor = self.sql_interface.cnx.cursor()
-            #mycursor.execute("SELECT LAST_INSERT_ID();")
-            # myresult = mycursor.fetchall()
-            # new_img_id = myresult[0][0] #auto_increment
-            path_first_file,name_first_file = self.consumer.fs.get_dir_for_object("img",{"image_id":new_img_id})
-            _ = self.consumer.fs.create_dir_for_object("img",{"image_id":new_img_id})
-            fits.writeto(f"{path_first_file}/{name_first_file}",res,header = header0,overwrite=True)
+                if not consider_goodness:
+                    args = (np.min(jd_start_list),np.mean(jd_mid_list),np.max(jd_end_list),int(np.sum(n_stack_list)),1,img_type_id,res_query[0]['flat_image_id'],res_query[0]['dark_image_id'],0,0,res_query[0]['obs_id'],new_name,0,res_query[0]['align_target_image_id'],res_query[0]['batch'],site_id,PID)
+                    sql = "INSERT INTO img (jd_utc_start,jd_utc_mid,jd_utc_end,n_stack,processed,image_type_id,flat_image_id,dark_image_id,x_to_template,y_to_template,obs_id,img_name,deleted,align_target_image_id,batch,store_site_id,birth_process_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+                else:
+                    args = (np.min(jd_start_list),np.mean(jd_mid_list),np.max(jd_end_list),int(np.sum(n_stack_list)),1,img_type_id,res_query[0]['flat_image_id'],res_query[0]['dark_image_id'],0,0,res_query[0]['obs_id'],new_name,0,res_query[0]['align_target_image_id'],res_query[0]['batch'],site_id,PID,np.sum(goodness_list))
+                    sql = "INSERT INTO img (jd_utc_start,jd_utc_mid,jd_utc_end,n_stack,processed,image_type_id,flat_image_id,dark_image_id,x_to_template,y_to_template,obs_id,img_name,deleted,align_target_image_id,batch,store_site_id,birth_process_id,coadd_weight) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+                #mycursor = self.sql_interface.cnx.cursor()
+                #mycursor.execute(sql,args)
+                #self.sql_interface.cnx.commit()
+                new_img_id = self.sql_interface.execute(sql,args,return_last_id=True)
+                #mycursor = self.sql_interface.cnx.cursor()
+                #mycursor.execute("SELECT LAST_INSERT_ID();")
+                # myresult = mycursor.fetchall()
+                # new_img_id = myresult[0][0] #auto_increment
+                path_first_file,name_first_file = self.consumer.fs.get_dir_for_object("img",{"image_id":new_img_id})
+                _ = self.consumer.fs.create_dir_for_object("img",{"image_id":new_img_id})
+                fits.writeto(f"{path_first_file}/{name_first_file}",res,header = header0,overwrite=True)
             print("recording stacking")
             for i in id_list:
                 args = (new_img_id,i)
@@ -573,7 +655,7 @@ ORDER BY
         return 1
         
         
-    def calibration(self,process_PID,site_id,cal_img_pid, sub_img_pid = -1, div_img_pid = -1,subtract_bkg = False,obs_id = -1,debug = True):#,obs_id=1,hierarchy=2,img_type = "flat_raw",consider_flat = True,consider_bias = True,bias_id = 2,bias_hierarchy = 2,flat_id = 1,flat_hierarchy = 2,keep_origin = True,outpath="samedir",debug = False):
+    def calibration(self,process_PID,site_id,cal_img_pid, sub_img_pid = -1, div_img_pid = -1,subtract_bkg = False,debug = True):#,obs_id=1,hierarchy=2,img_type = "flat_raw",consider_flat = True,consider_bias = True,bias_id = 2,bias_hierarchy = 2,flat_id = 1,flat_hierarchy = 2,keep_origin = True,outpath="samedir",debug = False):
         # Calibration of the image (debias/flat calibration or both)
         # Mask the bad pixels
 
@@ -649,26 +731,53 @@ ORDER BY
         if sub_img_pid > 0 and div_img_pid > 0:
             # full calibration for sky fields
             bkg = sep.Background(calibrated_image_ret.astype("float32"))
-            calibrated_image_debkg = calibrated_image_ret-bkg
+            calibrated_image_debkg = calibrated_image_ret.copy()-bkg
             if subtract_bkg:
                 calibrated_image_ret = calibrated_image_ret-bkg
-            star_resolve = sep.extract(calibrated_image_debkg.astype("float32"),5,err=bkg.globalrms,minarea=5)
-            n_stars = len(star_resolve)
+
             bkg_rms = bkg.globalrms
+
             # 将背景噪声 RMS 值记录到数据库中
-            sql = "UPDATE img SET bkg_rms = %s,n_star_resolved = %s  WHERE image_id = %s"
-            args = (float(bkg_rms), int(n_stars),new_img_id)
-            mycursor = self.sql_interface.cnx.cursor()
-            mycursor.execute(sql, args)
-            self.sql_interface.cnx.commit()
+            new_target_image_name_mask = "mask_"+new_target_image_name
+            args = (img_target['jd_utc_start'],img_target['jd_utc_mid'],img_target['jd_utc_end'],img_target['n_stack'],1,img_type_id_this,div_img_id,sub_img_id,0,0,img_target['obs_id'],new_target_image_name_mask,0,None,img_target['batch'],site_id)
+            #mycursor = self.sql_interface.cnx.cursor()
+            sql = "INSERT INTO img (jd_utc_start,jd_utc_mid,jd_utc_end,n_stack,processed,image_type_id,flat_image_id,dark_image_id,x_to_template,y_to_template,obs_id,img_name,deleted,align_target_image_id,batch,store_site_id,is_mask) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)"
+            #mycursor.execute(sql,args)
+            #self.sql_interface.cnx.commit()
+            new_img_mask_id = self.sql_interface.execute(sql,args,return_last_id=True)
             print(f"bkg RMS = {bkg_rms} recorded at image_id: {new_img_id}")
+            # Get mask for saturated pixels, Cosmic ray, hot pixels and airplane/satellite tracks
+
+            mask_save_image_path,mask_save_image_name = self.consumer.fs.get_dir_for_object("img",{"image_id":new_img_mask_id})
+            mask_full_img_path = f"{mask_save_image_path}/{mask_save_image_name}"
+            
+            success = self.consumer.fs.create_dir_for_object("img",{"image_id":new_img_mask_id})
+
+            inst_info = self.consumer.dl.get_img_instrument_param(obs_id = int(img_target['obs_id']))
+            mask,n_air = self.get_mask(calibrated_image.astype("float32"),Nbit = int(inst_info['n_bit']),sat_level = 0.9,gain = float(inst_info['gain']),readnoise = float(inst_info['readout_noise_e']))
+            mask = ~mask
+
+            fits.writeto(mask_full_img_path,mask.astype('float32'),overwrite=True)
+            if n_air==0:
+                star_resolve = sep.extract(calibrated_image_debkg.astype("float32"),5,err=bkg.globalrms,minarea=5)
+                n_stars = len(star_resolve)
+            else:
+                n_stars = 0
+            
+            sql = "UPDATE img SET bkg_rms = %s,n_star_resolved = %s,mask_image_id = %s  WHERE image_id = %s"
+            args = (float(bkg_rms), int(n_stars),new_img_mask_id,new_img_id)
+            self.sql_interface.execute(sql, args)
             #fits.writeto(f"{save_image_path}/{save_image_name.strip('.fits').strip('.fit')+"_bkgrms.fits"}",bkg_rms.astype('float32'),header = calibrated_image_header,overwrite=True)
+
 
         
         fits.writeto(full_img_path,calibrated_image_ret.astype('float32'),header = calibrated_image_header,overwrite=True)
-
+        if sub_img_pid > 0 and div_img_pid > 0:
+            if n_air==0:
+                wcs = self.get_image_WCS(new_img_id,target_id = int(inst_info['target_id']))
+                print(wcs)
         return success
-    def get_mask(self,image,Nbit = 16,sat_level = 0.9,gain = 1.3,readnoise = 1,dilation_radius = 5,show = False):
+    def get_mask(self,image,Nbit = 16,sat_level = 0.9,gain = 1.3,readnoise = 1,dilation_radius = 5,saturate = False,show = False):
         # Get the masks for saturated pixels, Cosmic ray, hot pixels and airplane/satellite tracks
         # saturate
         mask_saturate = image > (2 ** Nbit * sat_level)
@@ -715,14 +824,15 @@ ORDER BY
         mask_track = mask_track>1
         struct = disk(dilation_radius) # Or square(2*dilation_radius + 1)
         mask_track = binary_dilation(mask_track, footprint=struct)
-
-
-
+        mask =  mask_hot_pixel | mask_track
+        if saturate:
+            
+            mask = mask | mask_saturate
         # compute the mask
-        mask = mask_saturate | mask_hot_pixel | mask_track
+        
         print(f'masked {np.sum(mask)} pixels')
 
-        return mask
+        return mask,len(airplane_contour)
     def mask_cosmic_rays(self,data, sigclip=4.5, objlim=5.0, gain=1.0, readnoise=5.0, satlevel=60000.0, verbose=False):
         """
         Creates a mask for cosmic rays using the L.A.Cosmic algorithm.

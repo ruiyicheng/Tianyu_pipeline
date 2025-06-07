@@ -1,7 +1,9 @@
 # Use Bertin's software in a Pythonic way
-# Called by other components by:
-# res = self.consumer.Bertin.method()
+
 import os
+import sys
+sys.path.append(os.path.abspath("/home/test/workspace/Tianyu_pipeline/algorithm/code"))
+
 import subprocess
 import pandas as pd
 import numpy as np
@@ -9,13 +11,12 @@ import astrometry
 import astropy
 from astropy.wcs import WCS
 from astropy.io import fits
-from Tianyu_pipeline.pipeline.middleware.consumer_component import consumer_component
 from astroquery.gaia import Gaia
 from astropy.table import Table
 import sep
 
-class Bertin_tools(consumer_component):
-    def __init__(self,mode = "consumer_component",cache_dir = None):
+class Bertin_tools:
+    def __init__(self,mode = "consumer_component",cache_dir = '/home/test/workspace/Tianyu_pipeline/algorithm/data/testoutput/temp'):
         '''
         if used indepentently, set mode = "independent" and cache_dir = path to the cache directory
         '''
@@ -58,8 +59,8 @@ CIRCLE('ICRS',{ra},{dec},{fov})
         if len(parameter_dict)>0:
             cmd = " | sed"
             for k in parameter_dict:
-                re_remove = f'^{k}  *[:/_.0-9a-zA-Z]*  *'
-                cmd += f" -e 's|{re_remove}|{k} {parameter_dict[k]} |g' "
+                re_remove = f'^{k}  *[:/_.0-9a-zA-Z,]*'
+                cmd += f" -e 's|{re_remove}|{k} {parameter_dict[k]} #|g' "
         cmd += f" > {exportfilename}"
         return cmd
     def generate_output_sextractor(self,parameter_list,exportfilename):
@@ -67,7 +68,11 @@ CIRCLE('ICRS',{ra},{dec},{fov})
         if len(parameter_list)>0:
             cmd = " | sed"
             for item in parameter_list:
-                cmd += f" -e 's/^#{item}/{item} #/g' "
+                if type(item) == str:
+                    cmd += f" -e 's/^#{item}/{item} #/g' "
+                else:
+                    for k in item:
+                        cmd += f" -e 's/^#{k}/{item[k]} #/g' "
         cmd += f" > {exportfilename}"
         return cmd
     def SExtractor(self,img_path,param_dict,output_list,out_file_name = -1):
@@ -80,6 +85,14 @@ CIRCLE('ICRS',{ra},{dec},{fov})
             param_dict["FILTER"] = "N" # No filter by default
         if not "CATALOG_TYPE" in param_dict:
             param_dict["CATALOG_TYPE"] = "FITS_LDAC"
+        if not "DETECT_THRESH" in param_dict:
+            param_dict["DETECT_THRESH"] = 5
+        if not "DETECT_MINAREA" in param_dict:
+            param_dict["DETECT_MINAREA"] = 5
+        if not "ANALYSIS_THRESH" in param_dict:
+            param_dict["ANALYSIS_THRESH"] = 5
+        if not "PHOT_APERTURES" in param_dict:
+            param_dict["PHOT_APERTURES"] = "15"
         # Generate the parameter and config file names
         param_file_name = f"sextractor_{os.getpid()}.param"
         config_file_name = f"sextractor_{os.getpid()}.sex"
@@ -211,7 +224,7 @@ CIRCLE('ICRS',{ra},{dec},{fov})
         if not "DETECT_MINAREA" in sextractor_dict_param:
             sextractor_dict_param["DETECT_MINAREA"] = 5
         if not "DETECT_THRESH" in sextractor_dict_param:
-            sextractor_dict_param["DETECT_THRESH"] = 3
+            sextractor_dict_param["DETECT_THRESH"] = 5
         WCS_KEYWORDS = [f"CD1_{i}" for i in range(1,11)]+[f"CD2_{i}" for i in range(1,11)]+[f"PC1_{i}" for i in range(1,11)]+[f"PC2_{i}" for i in range(1,11)]+[f"PV1_{i}" for i in range(0,20)]+[f"PV2_{i}" for i in range(0,20)]+['WCSAXES', 'CRPIX1', 'CRPIX2', 'CRVAL1', 'CRVAL2', 'CTYPE1', 'CTYPE2','CUNIT1', 'CUNIT2','CDELT1', 'CDELT2','LONPOLE', 'LATPOLE', 'RADESYS', 'EQUINOX']+[f"PV4_{i}" for i in range(0,20)]+[f"PV3_{i}" for i in range(0,20)]
         method = None
         if ra_deg is not None and dec_deg is not None and arcsec_per_pixel is not None:
@@ -364,9 +377,15 @@ sip_order = 0,tune_up_logodds_threshold = None
         if not "MEM_MAX" in param_dict:
             param_dict["MEM_MAX"] = "4095" # 4GB VRAM by default
         if not "COMBINE_BUFSIZE" in param_dict:
-            param_dict["COMBINE_BUFSIZE"] = "4095" # 4GB VRAM by default                      
+            param_dict["COMBINE_BUFSIZE"] = "4095" # 4GB VRAM by default      
+        if not "INTERPOLATE" in param_dict:
+            param_dict["INTERPOLATE"] = "Y"  
+        if not "OVERSAMPLING" in param_dict:
+            param_dict["OVERSAMPLING"] = "1"        
         # if not "COMBINE_TYPE" in param_dict:
         #     param_dict["COMBINE_TYPE"] = "WEIGHTED" 
+        if not "RESAMPLING_TYPE" in param_dict:
+            param_dict["RESAMPLING_TYPE"] = "NEAREST" 
         param_dict["IMAGEOUT_NAME"] = outprefix+".fits"
         param_dict["WEIGHTOUT_NAME"] = outprefix+"_weight.fits"
         
@@ -383,7 +402,7 @@ sip_order = 0,tune_up_logodds_threshold = None
 
         
 
-    def SWARP_stack(self,image_path_list,param_dict,weight_path_list = None, weight_number_list = None, delete_weight = False, target_prefix = None,rot_deg = 0):
+    def SWARP_stack(self,image_path_list,param_dict,weight_path_list = None, weight_number_list = None, delete_weight = False, target_prefix = None,rot_deg = 0,remove_cache_header = False,header_out = None):
         def create_constant_weight(input_fits, weight_value, output_weight_fits):
             data = fits.getdata(input_fits)
             hdu = fits.PrimaryHDU(np.full_like(data, weight_value, dtype=np.float32))
@@ -425,47 +444,48 @@ sip_order = 0,tune_up_logodds_threshold = None
             os.remove(target_prefix+".head")
         # The default WCS of the result image is the same as the first image
         # Write this WCS into target_prefix+".head"
-        header_origin = fits.getheader(image_path_list[0])
-        wcs_out = WCS(fits.getheader(image_path_list[0]))
+        if header_out is None:
+            header_origin = fits.getheader(image_path_list[0])
+            wcs_out = WCS(fits.getheader(image_path_list[0]))
 
 
-        if rot_deg == 0:
-            header_out = wcs_out.to_header()
-            header_out['NAXIS'] = 2
-            header_out['NAXIS1'] = header_origin['NAXIS1']
-            header_out['NAXIS2'] = header_origin['NAXIS2']
-        else:
-            header_out = fits.Header()
-            # Obtain the CD components and rotate according to rot_deg
-            cd1_1 = header_origin['CD1_1']
-            cd1_2 = header_origin['CD1_2']
-            cd2_1 = header_origin['CD2_1']
-            cd2_2 = header_origin['CD2_2']
-            # Calculate the rotation matrix
-            rotation_matrix = np.array([[np.cos(np.radians(rot_deg)), -np.sin(np.radians(rot_deg))],
-                                         [np.sin(np.radians(rot_deg)), np.cos(np.radians(rot_deg))]])
-            # Rotate the CD components
-            cd1_1_rotated, cd1_2_rotated = np.dot(rotation_matrix, [cd1_1, cd1_2])
-            cd2_1_rotated, cd2_2_rotated = np.dot(rotation_matrix, [cd2_1, cd2_2])
-            # Update the header with the rotated CD components
-            header_out['CD1_1'] = cd1_1_rotated
-            header_out['CD1_2'] = cd1_2_rotated
-            header_out['CD2_1'] = cd2_1_rotated
-            header_out['CD2_2'] = cd2_2_rotated
+            if rot_deg == 0:
+                header_out = wcs_out.to_header()
+                header_out['NAXIS'] = 2
+                header_out['NAXIS1'] = header_origin['NAXIS1']
+                header_out['NAXIS2'] = header_origin['NAXIS2']
+            else:
+                header_out = fits.Header()
+                # Obtain the CD components and rotate according to rot_deg
+                cd1_1 = header_origin['CD1_1']
+                cd1_2 = header_origin['CD1_2']
+                cd2_1 = header_origin['CD2_1']
+                cd2_2 = header_origin['CD2_2']
+                # Calculate the rotation matrix
+                rotation_matrix = np.array([[np.cos(np.radians(rot_deg)), -np.sin(np.radians(rot_deg))],
+                                            [np.sin(np.radians(rot_deg)), np.cos(np.radians(rot_deg))]])
+                # Rotate the CD components
+                cd1_1_rotated, cd1_2_rotated = np.dot(rotation_matrix, [cd1_1, cd1_2])
+                cd2_1_rotated, cd2_2_rotated = np.dot(rotation_matrix, [cd2_1, cd2_2])
+                # Update the header with the rotated CD components
+                header_out['CD1_1'] = cd1_1_rotated
+                header_out['CD1_2'] = cd1_2_rotated
+                header_out['CD2_1'] = cd2_1_rotated
+                header_out['CD2_2'] = cd2_2_rotated
 
-            header_out['NAXIS1'] = int(np.abs(np.cos(np.radians(rot_deg))*header_origin['NAXIS1'])+np.abs(np.sin(np.radians(rot_deg))*header_origin['NAXIS2']))+1
-            header_out['NAXIS2'] = int(np.abs(np.sin(np.radians(rot_deg))*header_origin['NAXIS1'])+np.abs(np.cos(np.radians(rot_deg))*header_origin['NAXIS2']))+1
+                header_out['NAXIS1'] = int(np.abs(np.cos(np.radians(rot_deg))*header_origin['NAXIS1'])+np.abs(np.sin(np.radians(rot_deg))*header_origin['NAXIS2']))+1
+                header_out['NAXIS2'] = int(np.abs(np.sin(np.radians(rot_deg))*header_origin['NAXIS1'])+np.abs(np.cos(np.radians(rot_deg))*header_origin['NAXIS2']))+1
 
-            # Update the CRPIX values
-            coord = wcs_out.all_pix2world([[header_origin['NAXIS1']//2,header_origin['NAXIS2']//2]],0)
-            ra,dec = coord[0]
-            print('center of image:',ra,dec)
-            header_out['CRPIX1'] = header_out['NAXIS1']//2
-            header_out['CRPIX2'] = header_out['NAXIS2']//2
-            # Update the CRVAL values
-            header_out['CRVAL1'] = ra
-            header_out['CRVAL2'] = dec
-            print(header_out)
+                # Update the CRPIX values
+                coord = wcs_out.all_pix2world([[header_origin['NAXIS1']//2,header_origin['NAXIS2']//2]],0)
+                ra,dec = coord[0]
+                print('center of image:',ra,dec)
+                header_out['CRPIX1'] = header_out['NAXIS1']//2
+                header_out['CRPIX2'] = header_out['NAXIS2']//2
+                # Update the CRVAL values
+                header_out['CRVAL1'] = ra
+                header_out['CRVAL2'] = dec
+                print(header_out)
         header_out.tofile(target_prefix+".head",overwrite=True)
 
         output_image_file_path, output_weight_file_path = self.SWARP("@"+temp_input_file_list_path,param_dict,target_prefix)
@@ -478,7 +498,94 @@ sip_order = 0,tune_up_logodds_threshold = None
                 for weight_path in weight_path_list:
                     os.remove(weight_path)
             
-
+        if remove_cache_header:
+            os.remove(target_prefix+".head")
         return output_image_file_path, output_weight_file_path
 
+    def PSFex(self,input_catalog_path,param_dict,output_psf_path = None):
+        """
+        Use PSFex to generate the PSF model
+        """
+        if not "WRITE_XML" in param_dict:
+            param_dict["WRITE_XML"] = "N"
+        if not "CHECKPLOT_ANTIALIAS" in param_dict:
+            param_dict["CHECKPLOT_ANTIALIAS"] = "N"
+        if not "CHECKPLOT_DEV" in param_dict:
+            param_dict["CHECKPLOT_DEV"] = "NULL"
+        if not "CHECKPLOT_TYPE" in param_dict:
+            param_dict["CHECKPLOT_TYPE"] = "NONE"
         
+        if not "CHECKPLOT_NAME" in param_dict:
+            param_dict["CHECKPLOT_NAME"] = "NONE"
+
+        if not "CHECKIMAGE_TYPE" in param_dict:
+            param_dict["CHECKIMAGE_TYPE"] = "NONE"
+        if not "CHECKIMAGE_NAME" in param_dict:
+            param_dict["CHECKIMAGE_NAME"] = "check_img_psf"
+        if output_psf_path is None:
+            output_psf_path = os.path.join(self.cache_dir,f"psfex_{os.getpid()}.psf")
+            param_dict["PSF_DIR"] = self.cache_dir
+        if not "OUTCAT_TYPE" in param_dict:
+            param_dict["OUTCAT_TYPE"] = "NONE"
+        
+
+        param_file_name = f"psfex_{os.getpid()}.param"
+        param_file_path = os.path.join(self.cache_dir,param_file_name)
+        command = "psfex -dd"+self.generate_parameter_pipe(param_dict,param_file_path)
+        subprocess.run(f'cat {param_file_path}', shell=True)
+        subprocess.run(command, shell=True)
+        command = f"psfex {input_catalog_path} -c {param_file_path}"
+        subprocess.run(command, shell=True)
+        # Delete the parameter file
+        subprocess.run(f"rm {param_file_path}", shell=True)
+        
+        psfex_out_path = os.path.join(param_dict["PSF_DIR"],input_catalog_path.replace('.cat','.psf'))
+        print('PATH:',psfex_out_path,output_psf_path)
+        subprocess.run(f"mv {psfex_out_path} {output_psf_path}", shell=True)
+        return output_psf_path
+    
+    def PSFex_image(self,image_path,sextractor_param_dict,psfex_param_dict,out_psf_path = None, return_func = True):
+        """
+        Use PSFex to generate the PSF model from the image
+        """
+        def normalize(x, x0, scale):
+            return (x - x0) / scale
+        def poly_terms(x, y):
+            return np.array([1, x, y, x**2, x*y, y**2])  # degree-2
+        def evaluate_psf(x_img, y_img, psf_model = None, header = None):
+            x = normalize(x_img, header['POLZERO1'], header['POLSCAL1'])
+            y = normalize(y_img, header['POLZERO2'], header['POLSCAL2'])
+
+            coeffs = poly_terms(x, y).reshape(6,1,1)  # shape (6,)
+            # print(psf_model.shape)
+            
+            psf = psf_model*coeffs
+            psf = psf.sum(axis=0)  # sum over the polynomial coefficients
+            return psf
+        
+
+        # Generate the SExtractor catalog
+        output_list = [{"FLUX_APER":"FLUX_APER(1)"},{"FLUXERR_APER":"FLUX_APER(1)"},"SNR_WIN","X_IMAGE","Y_IMAGE","ELONGATION",{'VIGNET':"VIGNET(45,45)"},"FLUX_RADIUS","XWIN_IMAGE","YWIN_IMAGE","ERRAWIN_IMAGE","ERRBWIN_IMAGE","ERRTHETAWIN_IMAGE","ELONGATION","FLUX_RADIUS","FLAGS"]
+        sextractor_catalog = self.SExtractor(image_path,sextractor_param_dict,output_list)
+        # Generate the PSF model
+        psfex_catalog = self.PSFex(sextractor_catalog,psfex_param_dict,output_psf_path = out_psf_path)
+        # mv sextractor_catalog
+        os.remove(sextractor_catalog)
+        # Delete the SExtractor catalog
+        if return_func:
+            hdul = fits.open(psfex_catalog)
+            print(hdul.info())
+            data = hdul['PSF_DATA'].data[0][0]  # shape (25, 25, 6)
+            header = hdul['PSF_DATA'].header
+            f = lambda x_img, y_img: evaluate_psf(x_img, y_img, psf_model = data, header = header)
+            return psfex_catalog,f
+        return psfex_catalog
+    
+if __name__ == "__main__":
+    # Example usage
+    bertin = Bertin_tools()
+    # Example parameters
+    ret = bertin.PSFex_image("/home/test/workspace/Tianyu_pipeline/algorithm/data/testoutput/image/stacked_science/stacked_KOI68.fit",{},{})
+    print(ret[0])
+    print(np.sum(ret[1](10,100)))
+    print(np.sum(ret[1](100,200)))

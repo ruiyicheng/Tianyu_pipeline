@@ -58,7 +58,7 @@ ON ins.instrument_id = obs.instrument_id
 LEFT JOIN obs_site AS site
 ON site.obs_site_id= obs.obs_site_id
 LEFT JOIN filters
-ON filters.filter_id = ins.filter_id
+ON filters.filter_id = obs.filter_id
 WHERE obs.process_id=%s;'''
                 args = (param_dict['observation_pid'],)
                 result = self.sql_interface.query(sql,args)
@@ -74,7 +74,7 @@ ON ins.instrument_id = obs.instrument_id
 LEFT JOIN obs_site AS site
 ON site.obs_site_id= obs.obs_site_id
 LEFT JOIN filters
-ON filters.filter_id = ins.filter_id
+ON filters.filter_id = obs.filter_id
 WHERE obs.obs_id=%s;'''
                 args = (param_dict['observation_id'],)
                 result = self.sql_interface.query(sql,args)

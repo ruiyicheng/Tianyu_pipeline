@@ -9,9 +9,9 @@ class sql_interface:
         self.host = host
         self.database = database
 
-        #self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
-                            # host='192.168.1.107',
-                            # database='tianyudev')
+        self.cnx = mysql.connector.connect(user='tianyu', password='tianyu',
+                            host='192.168.1.107',
+                            database='tianyudev')
     # @property
     # def cnx(self):
     #     return mysql.connector.connect(user='tianyu', password='tianyu',host='192.168.1.107',database='tianyudev')
