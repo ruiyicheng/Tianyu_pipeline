@@ -945,7 +945,7 @@ if __name__ == '__main__':
 
     camera_par = {'pixel_size_mum':10,'pixel_number_x':8120,'pixel_number_y':8120,'readout_time_s':1/2.9,'gain':1.44,'dark_current_e_s_1':0.05,'full_well_capacity_ke':119,'read_noise_e':1.6,'QE':0.7,'bit_per_pixel':18,'bias_level':1000}
     mount_par = {'tracking_mode':'alt-az','tracking_speed_deg_s_1':5,'stable_time_s':5,'goto_error_arcsec':0.2,'tracking_error_arcsec_min_1':0.1}
-    telescope_par = {'latlonalt':(38.6068,93.8961,4000),'seeing_arcsec':1.3,'focal_length_m':1.57,'diameter_m':1}
+    telescope_par = {'latlonalt':(38.6068,93.8961,4000),'seeing_arcsec':2.1,'focal_length_m':1.57,'diameter_m':1}
     star_config = {# supernova_erupt mean using rejection sampling to generate supernova on the FOV galaxies, the number depends on the rows of the supernova_erupt_catalog
                     # satellite_flag mean whether to consider the satellite of the satellite_catalog, satellite_catalog is time-sensitive and needs to often downloaded and update manually, or each time via a URL
                     'gaia_catalog':'online','Gmag_limit':25,'alpha':3, 'supernova_erupt':True,'satellite_flag':False, 
